@@ -1,0 +1,117 @@
+# Kconfig file for CherryAVP
+menuconfig CHERRYAVP
+    bool "CherryAVP Configuration"
+    default n
+
+if CHERRYAVP
+
+menu "Container formats"
+
+config CHERRYAVP_WAV
+    bool "Enable WAV Container"
+    default y
+
+config CHERRYAVP_AVI
+    bool "Enable AVI Container"
+    default y
+
+config CHERRYAVP_M4A
+    bool "Enable M4A Container"
+    select CHERRYAVP_AAC
+    select CHERRYAVP_ALAC
+    default y
+
+config CHERRYAVP_MP4
+    bool "Enable MP4 Container"
+    select CHERRYAVP_AAC
+    select CHERRYAVP_ALAC
+    default y
+
+config CHERRYAVP_OGG
+    bool "Enable OGG Container"
+    select CHERRYAVP_OPUS
+    select CHERRYAVP_VORBIS
+    default y
+
+endmenu
+
+menu "Audio codecs"
+
+config CHERRYAVP_FLAC
+    bool "Enable FLAC codec and container"
+    default y
+
+config CHERRYAVP_ALAC
+    bool "Enable ALAC codec and container"
+    default y
+
+config CHERRYAVP_MP3
+    bool "Enable MP3 codec and container"
+    default y
+
+config CHERRYAVP_AAC
+    bool "Enable AAC codec and container"
+    default y
+
+config CHERRYAVP_AMR
+    bool "Enable AMR codec and container"
+    default y
+
+config CHERRYAVP_ADPCM
+    bool "Enable ADPCM codec and container"
+    default y
+
+config CHERRYAVP_G711
+    bool "Enable G711 codec and container"
+    default y
+
+config CHERRYAVP_G722
+    bool "Enable G722 codec and container"
+    default y
+
+config CHERRYAVP_OPUS
+    bool "Enable OPUS codec and container"
+    default y
+
+config CHERRYAVP_VORBIS
+    bool "Enable VORBIS codec and container"
+    default y
+
+config CHERRYAVP_MP3_DECODER_OPENCORE
+    bool "Use OpenCORE MP3 decoder"
+    depends on CHERRYAVP_MP3
+    default n
+
+config AVP_AAC_PLUS
+    bool "Enable AAC+"
+    depends on CHERRYAVP_AAC
+    default n
+
+endmenu
+
+menu "Audio processing"
+
+config CHERRYAVP_SWR
+    bool "Enable Software resampler module"
+    default y
+
+config CHERRYAVP_AFE_3A
+    bool "Enable AFE 3A module"
+    default y
+
+config CHERRYAVP_AFE_3A_NS_FIXED
+    bool "Enable AFE 3A noise suppression with fixed point"
+    depends on CHERRYAVP_AFE_3A
+    default n
+
+config CHERRYAVP_AE_SONIC
+    bool "Enable AE Sonic module"
+    default y
+
+config CHERRYAVP_AE_VOL
+    bool "Enable AE Volume module"
+    default y
+
+endmenu
+
+endif

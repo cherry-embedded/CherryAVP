@@ -1,0 +1,241 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 45;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		89D087EB14884F1D00C955C4 /* ag_dec.c in Sources */ = {isa = PBXBuildFile; fileRef = 89D087E114884F1D00C955C4 /* ag_dec.c */; };
+		89D087EC14884F1D00C955C4 /* ag_enc.c in Sources */ = {isa = PBXBuildFile; fileRef = 89D087E214884F1D00C955C4 /* ag_enc.c */; };
+		89D087ED14884F1D00C955C4 /* ALACBitUtilities.c in Sources */ = {isa = PBXBuildFile; fileRef = 89D087E314884F1D00C955C4 /* ALACBitUtilities.c */; };
+		89D087EE14884F1D00C955C4 /* ALACDecoder.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 89D087E414884F1D00C955C4 /* ALACDecoder.cpp */; };
+		89D087EF14884F1D00C955C4 /* ALACEncoder.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 89D087E514884F1D00C955C4 /* ALACEncoder.cpp */; };
+		89D087F014884F1D00C955C4 /* dp_dec.c in Sources */ = {isa = PBXBuildFile; fileRef = 89D087E614884F1D00C955C4 /* dp_dec.c */; };
+		89D087F114884F1D00C955C4 /* dp_enc.c in Sources */ = {isa = PBXBuildFile; fileRef = 89D087E714884F1D00C955C4 /* dp_enc.c */; };
+		89D087F214884F1D00C955C4 /* EndianPortable.c in Sources */ = {isa = PBXBuildFile; fileRef = 89D087E814884F1D00C955C4 /* EndianPortable.c */; };
+		89D087F314884F1D00C955C4 /* matrix_dec.c in Sources */ = {isa = PBXBuildFile; fileRef = 89D087E914884F1D00C955C4 /* matrix_dec.c */; };
+		89D087F414884F1D00C955C4 /* matrix_enc.c in Sources */ = {isa = PBXBuildFile; fileRef = 89D087EA14884F1D00C955C4 /* matrix_enc.c */; };
+		89D087FC14884F4100C955C4 /* aglib.h in Headers */ = {isa = PBXBuildFile; fileRef = 89D087F514884F4100C955C4 /* aglib.h */; };
+		89D087FD14884F4100C955C4 /* ALACBitUtilities.h in Headers */ = {isa = PBXBuildFile; fileRef = 89D087F614884F4100C955C4 /* ALACBitUtilities.h */; };
+		89D087FE14884F4100C955C4 /* ALACDecoder.h in Headers */ = {isa = PBXBuildFile; fileRef = 89D087F714884F4100C955C4 /* ALACDecoder.h */; };
+		89D087FF14884F4100C955C4 /* ALACEncoder.h in Headers */ = {isa = PBXBuildFile; fileRef = 89D087F814884F4100C955C4 /* ALACEncoder.h */; };
+		89D0880014884F4100C955C4 /* dplib.h in Headers */ = {isa = PBXBuildFile; fileRef = 89D087F914884F4100C955C4 /* dplib.h */; };
+		89D0880114884F4100C955C4 /* EndianPortable.h in Headers */ = {isa = PBXBuildFile; fileRef = 89D087FA14884F4100C955C4 /* EndianPortable.h */; };
+		89D0880214884F4100C955C4 /* matrixlib.h in Headers */ = {isa = PBXBuildFile; fileRef = 89D087FB14884F4100C955C4 /* matrixlib.h */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		89D087E114884F1D00C955C4 /* ag_dec.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ag_dec.c; path = ../ag_dec.c; sourceTree = SOURCE_ROOT; };
+		89D087E214884F1D00C955C4 /* ag_enc.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ag_enc.c; path = ../ag_enc.c; sourceTree = SOURCE_ROOT; };
+		89D087E314884F1D00C955C4 /* ALACBitUtilities.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ALACBitUtilities.c; path = ../ALACBitUtilities.c; sourceTree = SOURCE_ROOT; };
+		89D087E414884F1D00C955C4 /* ALACDecoder.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = ALACDecoder.cpp; path = ../ALACDecoder.cpp; sourceTree = SOURCE_ROOT; };
+		89D087E514884F1D00C955C4 /* ALACEncoder.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = ALACEncoder.cpp; path = ../ALACEncoder.cpp; sourceTree = SOURCE_ROOT; };
+		89D087E614884F1D00C955C4 /* dp_dec.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = dp_dec.c; path = ../dp_dec.c; sourceTree = SOURCE_ROOT; };
+		89D087E714884F1D00C955C4 /* dp_enc.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = dp_enc.c; path = ../dp_enc.c; sourceTree = SOURCE_ROOT; };
+		89D087E814884F1D00C955C4 /* EndianPortable.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = EndianPortable.c; path = ../EndianPortable.c; sourceTree = SOURCE_ROOT; };
+		89D087E914884F1D00C955C4 /* matrix_dec.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = matrix_dec.c; path = ../matrix_dec.c; sourceTree = SOURCE_ROOT; };
+		89D087EA14884F1D00C955C4 /* matrix_enc.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = matrix_enc.c; path = ../matrix_enc.c; sourceTree = SOURCE_ROOT; };
+		89D087F514884F4100C955C4 /* aglib.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = aglib.h; path = ../aglib.h; sourceTree = SOURCE_ROOT; };
+		89D087F614884F4100C955C4 /* ALACBitUtilities.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ALACBitUtilities.h; path = ../ALACBitUtilities.h; sourceTree = SOURCE_ROOT; };
+		89D087F714884F4100C955C4 /* ALACDecoder.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ALACDecoder.h; path = ../ALACDecoder.h; sourceTree = SOURCE_ROOT; };
+		89D087F814884F4100C955C4 /* ALACEncoder.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ALACEncoder.h; path = ../ALACEncoder.h; sourceTree = SOURCE_ROOT; };
+		89D087F914884F4100C955C4 /* dplib.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = dplib.h; path = ../dplib.h; sourceTree = SOURCE_ROOT; };
+		89D087FA14884F4100C955C4 /* EndianPortable.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = EndianPortable.h; path = ../EndianPortable.h; sourceTree = SOURCE_ROOT; };
+		89D087FB14884F4100C955C4 /* matrixlib.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = matrixlib.h; path = ../matrixlib.h; sourceTree = SOURCE_ROOT; };
+		89D088671488568E00C955C4 /* MacConfigExternalDebug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = MacConfigExternalDebug.xcconfig; path = ../../../MacConfigExternalDebug.xcconfig; sourceTree = SOURCE_ROOT; };
+		89D088681488568E00C955C4 /* MacConfigExternalRelease.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = MacConfigExternalRelease.xcconfig; path = ../../../MacConfigExternalRelease.xcconfig; sourceTree = SOURCE_ROOT; };
+		D2AAC046055464E500DB518D /* libALACCodec.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libALACCodec.a; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		D289987405E68DCB004EDB86 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		08FB7794FE84155DC02AAC07 /* ALACCodec */ = {
+			isa = PBXGroup;
+			children = (
+				89D088671488568E00C955C4 /* MacConfigExternalDebug.xcconfig */,
+				89D088681488568E00C955C4 /* MacConfigExternalRelease.xcconfig */,
+				08FB7795FE84155DC02AAC07 /* Source */,
+				C6A0FF2B0290797F04C91782 /* Documentation */,
+				1AB674ADFE9D54B511CA2CBB /* Products */,
+			);
+			name = ALACCodec;
+			sourceTree = "<group>";
+		};
+		08FB7795FE84155DC02AAC07 /* Source */ = {
+			isa = PBXGroup;
+			children = (
+				89D087F514884F4100C955C4 /* aglib.h */,
+				89D087F614884F4100C955C4 /* ALACBitUtilities.h */,
+				89D087F714884F4100C955C4 /* ALACDecoder.h */,
+				89D087F814884F4100C955C4 /* ALACEncoder.h */,
+				89D087F914884F4100C955C4 /* dplib.h */,
+				89D087FA14884F4100C955C4 /* EndianPortable.h */,
+				89D087FB14884F4100C955C4 /* matrixlib.h */,
+				89D087E114884F1D00C955C4 /* ag_dec.c */,
+				89D087E214884F1D00C955C4 /* ag_enc.c */,
+				89D087E314884F1D00C955C4 /* ALACBitUtilities.c */,
+				89D087E414884F1D00C955C4 /* ALACDecoder.cpp */,
+				89D087E514884F1D00C955C4 /* ALACEncoder.cpp */,
+				89D087E614884F1D00C955C4 /* dp_dec.c */,
+				89D087E714884F1D00C955C4 /* dp_enc.c */,
+				89D087E814884F1D00C955C4 /* EndianPortable.c */,
+				89D087E914884F1D00C955C4 /* matrix_dec.c */,
+				89D087EA14884F1D00C955C4 /* matrix_enc.c */,
+			);
+			name = Source;
+			sourceTree = "<group>";
+		};
+		1AB674ADFE9D54B511CA2CBB /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D2AAC046055464E500DB518D /* libALACCodec.a */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		C6A0FF2B0290797F04C91782 /* Documentation */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Documentation;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXHeadersBuildPhase section */
+		D2AAC043055464E500DB518D /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				89D087FC14884F4100C955C4 /* aglib.h in Headers */,
+				89D087FD14884F4100C955C4 /* ALACBitUtilities.h in Headers */,
+				89D087FE14884F4100C955C4 /* ALACDecoder.h in Headers */,
+				89D087FF14884F4100C955C4 /* ALACEncoder.h in Headers */,
+				89D0880014884F4100C955C4 /* dplib.h in Headers */,
+				89D0880114884F4100C955C4 /* EndianPortable.h in Headers */,
+				89D0880214884F4100C955C4 /* matrixlib.h in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
+/* Begin PBXNativeTarget section */
+		D2AAC045055464E500DB518D /* ALACCodec */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1DEB91EB08733DB70010E9CD /* Build configuration list for PBXNativeTarget "ALACCodec" */;
+			buildPhases = (
+				D2AAC043055464E500DB518D /* Headers */,
+				D2AAC044055464E500DB518D /* Sources */,
+				D289987405E68DCB004EDB86 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ALACCodec;
+			productName = ALACCodec;
+			productReference = D2AAC046055464E500DB518D /* libALACCodec.a */;
+			productType = "com.apple.product-type.library.static";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		08FB7793FE84155DC02AAC07 /* Project object */ = {
+			isa = PBXProject;
+			buildConfigurationList = 1DEB91EF08733DB70010E9CD /* Build configuration list for PBXProject "ALACCodec" */;
+			compatibilityVersion = "Xcode 3.1";
+			hasScannedForEncodings = 1;
+			mainGroup = 08FB7794FE84155DC02AAC07 /* ALACCodec */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				D2AAC045055464E500DB518D /* ALACCodec */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		D2AAC044055464E500DB518D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				89D087EB14884F1D00C955C4 /* ag_dec.c in Sources */,
+				89D087EC14884F1D00C955C4 /* ag_enc.c in Sources */,
+				89D087ED14884F1D00C955C4 /* ALACBitUtilities.c in Sources */,
+				89D087EE14884F1D00C955C4 /* ALACDecoder.cpp in Sources */,
+				89D087EF14884F1D00C955C4 /* ALACEncoder.cpp in Sources */,
+				89D087F014884F1D00C955C4 /* dp_dec.c in Sources */,
+				89D087F114884F1D00C955C4 /* dp_enc.c in Sources */,
+				89D087F214884F1D00C955C4 /* EndianPortable.c in Sources */,
+				89D087F314884F1D00C955C4 /* matrix_dec.c in Sources */,
+				89D087F414884F1D00C955C4 /* matrix_enc.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1DEB91EC08733DB70010E9CD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				PRODUCT_NAME = ALACCodec;
+			};
+			name = Debug;
+		};
+		1DEB91ED08733DB70010E9CD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				PRODUCT_NAME = ALACCodec;
+			};
+			name = Release;
+		};
+		1DEB91F008733DB70010E9CD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 89D088671488568E00C955C4 /* MacConfigExternalDebug.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		1DEB91F108733DB70010E9CD /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 89D088681488568E00C955C4 /* MacConfigExternalRelease.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1DEB91EB08733DB70010E9CD /* Build configuration list for PBXNativeTarget "ALACCodec" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1DEB91EC08733DB70010E9CD /* Debug */,
+				1DEB91ED08733DB70010E9CD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1DEB91EF08733DB70010E9CD /* Build configuration list for PBXProject "ALACCodec" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1DEB91F008733DB70010E9CD /* Debug */,
+				1DEB91F108733DB70010E9CD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 08FB7793FE84155DC02AAC07 /* Project object */;
+}
