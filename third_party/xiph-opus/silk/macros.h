@@ -109,7 +109,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 #ifdef CONFIG_AVP_OPUS_SILK_DSP_OVERRIDE_INCLUDE
-#include "avp_common.h"
+#include CONFIG_AVP_OPUS_SILK_DSP_OVERRIDE_INCLUDE
 #endif
 
 #include "ecintrin.h"

@@ -3,8 +3,8 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-#ifndef AAC_DSP_OVERRIDE_HPM_H
-#define AAC_DSP_OVERRIDE_HPM_H
+#ifndef AAC_DSP_OVERRIDE_H
+#define AAC_DSP_OVERRIDE_H
 
 #ifdef __cplusplus
 extern "C"
@@ -175,4 +175,4 @@ static inline Int32 fxp_mul32_Q14(const Int32 a, const Int32 b)
 }
 #endif
 
-#endif /* AAC_DSP_OVERRIDE_HPM_H */
+#endif /* AAC_DSP_OVERRIDE_H */

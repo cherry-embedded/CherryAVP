@@ -181,7 +181,7 @@ static int have_simd()
     return 1;
 }
 #elif defined(CONFIG_AVP_MP3_DSP_OVERRIDE_INCLUDE)
-#include "avp_common.h"
+#include CONFIG_AVP_MP3_DSP_OVERRIDE_INCLUDE
 #else /* SIMD checks... */
 #define HAVE_SSE 0
 #define HAVE_SIMD 0

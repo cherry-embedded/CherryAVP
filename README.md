@@ -4,6 +4,7 @@
 <p align="center">
 	<a href="https://github.com/cherry-embedded/CherryAVP/releases"><img src="https://img.shields.io/github/release/cherry-embedded/CherryAVP.svg"></a>
 	<a href="https://github.com/cherry-embedded/CherryAVP/blob/master/LICENSE"><img src="https://img.shields.io/github/license/cherry-embedded/CherryAVP.svg?style=flat-square"></a>
+	<a href="https://github.com/cherry-embedded/CherryAVP/actions/workflows/build.yml"><img src="https://github.com/cherry-embedded/CherryAVP/actions/workflows/build.yml/badge.svg"> </a>
 </p>
 
 CherryAVP is a tiny and beautiful, low-memory and high-performance audio and video processing library designed for MCUs.
@@ -230,8 +231,6 @@ Implemented features:
 - 32 kHz band splitting: 32 kHz input is split into two 16 kHz bands; the low band is used by AEC / NS / AGC / VAD and then merged back to full-band output
 - Runtime control: AEC / NS / AGC / VAD / HPF can be enabled or disabled, and AEC, NS, AGC, and VAD parameters can be updated at runtime
 
-The current implementation does not include the full WebRTC APM feature set such as multi-channel processing, 48 kHz processing, automatic resampling, beamforming, AECM, level estimation, transient suppression, intelligibility enhancement, or debug dump.
-
 ### Automatic level control (ALC)
 ### Dynamic range control (DRC)
 ### Howling suppression
@@ -253,8 +252,6 @@ The Sonic-based time and pitch effect is based on **sonic** . It provides stream
 - Sample rate: configured by `avp_ae_sonic_config_t.sample_rate`; input and output keep the same sample rate
 - Features: independently controls speed, pitch, rate, volume, chord pitch mode, and quality
 - Runtime control: set/get speed, pitch, rate, volume, chord pitch, quality, sample rate, and channels; flush, reset, and query available output samples
-- Output length: speed, pitch, and rate changes can change the number of output samples, so callers must consume the exact `out_samples` returned by each call
-- Tail draining: after all input has been written, call `AVP_AE_SONIC_CMD_FLUSH`, then call `avp_ae_sonic_process(..., in = NULL, in_samples = 0, ...)` until `out_samples` becomes 0
 
 ### Volume control
 

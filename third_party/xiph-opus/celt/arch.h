@@ -238,7 +238,7 @@ static OPUS_INLINE opus_int16 SAT16(opus_int32 x) {
 #include "fixed_generic.h"
 
 #ifdef CONFIG_AVP_OPUS_CELT_DSP_OVERRIDE_INCLUDE
-#include "avp_common.h"
+#include CONFIG_AVP_OPUS_CELT_DSP_OVERRIDE_INCLUDE
 #endif
 
 #ifdef OPUS_ARM_PRESUME_AARCH64_NEON_INTR

@@ -3,8 +3,8 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-#ifndef OPUS_SILK_DSP_OVERRIDE_HPM_H
-#define OPUS_SILK_DSP_OVERRIDE_HPM_H
+#ifndef OPUS_SILK_DSP_OVERRIDE_H
+#define OPUS_SILK_DSP_OVERRIDE_H
 
 #include "nds32_intrinsic.h"
 
@@ -109,4 +109,4 @@ static OPUS_INLINE opus_int32 silk_CLZ32(opus_int32 in32)
 }
 #endif
 
-#endif /* OPUS_SILK_DSP_OVERRIDE_HPM_H */
+#endif /* OPUS_SILK_DSP_OVERRIDE_H */

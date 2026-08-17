@@ -61,6 +61,9 @@ void WebRtcAec_InitAec_mips(void);
 #if defined(WEBRTC_DETECT_NEON) || defined(WEBRTC_HAS_NEON)
 void WebRtcAec_InitAec_neon(void);
 #endif
+#if defined(CONFIG_AVP_WEBRTC_OVERRIDE)
+void WebRtcAec_InitAec_custom(void);
+#endif
 
 void WebRtcAec_BufferFarendPartition(AecCore* aec, const float* farend);
 void WebRtcAec_ProcessFrames(AecCore* aec,

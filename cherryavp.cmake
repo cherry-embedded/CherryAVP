@@ -37,12 +37,12 @@ set(CHERRYAVP_TARGET_SRC
 )
 set(CHERRYAVP_TARGET_PUBLIC_INCLUDE
     ${CMAKE_CURRENT_LIST_DIR}
+    ${CMAKE_CURRENT_LIST_DIR}/dsp_acc
     ${CHERRYAVP_AVUTIL_INCLUDE_DIR}
     ${CHERRYAVP_AVFORMAT_INCLUDE_DIR}
     ${CHERRYAVP_AVCODEC_INCLUDE_DIR}
     ${CHERRYAVP_AVFILTER_INCLUDE_DIR}
     ${CHERRYAVP_AVSWRESAMPLE_INCLUDE_DIR}
-    ${CHERRYAVP_AVCODEC_INCLUDE_DIR}/dsp_acc
 )
 set(CHERRYAVP_TARGET_PRIVATE_INCLUDE)
 set(CHERRYAVP_TARGET_PUBLIC_DEFINITION)
@@ -133,6 +133,7 @@ set(WEBRTC_AFE_SRC
     ${WEBRTC_DIR}/common_audio/signal_processing/resample_by_2.c
     ${WEBRTC_DIR}/common_audio/signal_processing/resample_by_2_internal.c
     ${WEBRTC_DIR}/common_audio/signal_processing/resample_fractional.c
+    ${WEBRTC_DIR}/common_audio/signal_processing/spl_init.c
     ${WEBRTC_DIR}/common_audio/signal_processing/spl_sqrt.c
     ${WEBRTC_DIR}/common_audio/signal_processing/spl_sqrt_floor.c
     ${WEBRTC_DIR}/common_audio/signal_processing/splitting_filter.c
@@ -152,6 +153,15 @@ set(WEBRTC_AFE_SRC
     ${WEBRTC_DIR}/modules/audio_processing/agc/legacy/analog_agc.c
     ${WEBRTC_DIR}/modules/audio_processing/agc/legacy/digital_agc.c
 )
+
+if(CONFIG_AVP_WEBRTC_OVERRIDE)
+    list(REMOVE_ITEM WEBRTC_AFE_SRC
+        ${WEBRTC_DIR}/common_audio/signal_processing/complex_bit_reverse.c
+        ${WEBRTC_DIR}/common_audio/signal_processing/complex_fft.c
+        ${WEBRTC_DIR}/common_audio/signal_processing/spl_sqrt_floor.c
+        ${WEBRTC_DIR}/common_audio/signal_processing/spl_init.c
+    )
+endif()
 
 if(CONFIG_CHERRYAVP_AFE_3A_NS_FIXED)
     list(APPEND WEBRTC_AFE_SRC

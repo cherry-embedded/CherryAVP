@@ -775,6 +775,9 @@ int32_t WebRtcNsx_InitCore(NoiseSuppressionFixedC* inst, uint32_t fs) {
   WebRtcNsx_InitMips();
 #endif
 
+#if defined(CONFIG_AVP_WEBRTC_OVERRIDE)
+  WebRtcNsx_Init_custom();
+#endif
   inst->initFlag = 1;
 
   return 0;

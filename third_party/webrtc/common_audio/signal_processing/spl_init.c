@@ -136,5 +136,5 @@ static void once(void (*func)(void)) {
 #endif  /* WEBRTC_POSIX */
 
 void WebRtcSpl_Init() {
-  once(InitFunctionPointers);
+  InitFunctionPointers();
 }

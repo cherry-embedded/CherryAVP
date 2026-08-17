@@ -57,5 +57,8 @@ void aec_rdft_init_mips(void);
 #if defined(WEBRTC_DETECT_NEON) || defined(WEBRTC_HAS_NEON)
 void aec_rdft_init_neon(void);
 #endif
+#if defined(CONFIG_AVP_WEBRTC_OVERRIDE)
+void aec_rdft_init_custom(void);
+#endif
 
 #endif  // WEBRTC_MODULES_AUDIO_PROCESSING_AEC_MAIN_SOURCE_AEC_RDFT_H_

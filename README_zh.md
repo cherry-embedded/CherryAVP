@@ -4,6 +4,7 @@
 <p align="center">
 	<a href="https://github.com/cherry-embedded/CherryAVP/releases"><img src="https://img.shields.io/github/release/cherry-embedded/CherryAVP.svg"></a>
 	<a href="https://github.com/cherry-embedded/CherryAVP/blob/master/LICENSE"><img src="https://img.shields.io/github/license/cherry-embedded/CherryAVP.svg?style=flat-square"></a>
+	<a href="https://github.com/cherry-embedded/CherryAVP/actions/workflows/build.yml"><img src="https://github.com/cherry-embedded/CherryAVP/actions/workflows/build.yml/badge.svg"> </a>
 </p>
 
 CherryAVP 是一个小而美，低内存，高性能的专为 MCU 设计的 Audio & Video 处理库。
@@ -247,8 +248,6 @@ CherryAVP 是一个小而美，低内存，高性能的专为 MCU 设计的 Audi
 - 采样率：由 `avp_ae_sonic_config_t.sample_rate` 指定，输入和输出保持同一采样率
 - 支持能力：独立设置 speed、pitch、rate、volume、chord pitch mode、quality
 - 运行时控制：支持 set/get speed、pitch、rate、volume、chord pitch、quality、sample rate、channels，支持 flush、reset 和查询内部可读输出采样数
-- 输出长度：变速/变调会改变输出采样数，单次 `process` 输出可能少于或多于输入，需要调用方按 `out_samples` 消费
-- 尾包处理：处理完输入后调用 `AVP_AE_SONIC_CMD_FLUSH`，再用 `avp_ae_sonic_process(..., in = NULL, in_samples = 0, ...)` 反复读取，直到 `out_samples` 为 0
 
 ### 音量控制 (Volume Control)
 

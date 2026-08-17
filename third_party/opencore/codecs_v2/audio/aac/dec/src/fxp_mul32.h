@@ -58,7 +58,7 @@
 #include "fxp_mul32_arm_v4_gcc.h"
 
 #elif defined(CONFIG_AVP_AAC_DSP_OVERRIDE_INCLUDE)
-#include "avp_common.h"
+#include CONFIG_AVP_AAC_DSP_OVERRIDE_INCLUDE
 #else
 
 #ifndef C_EQUIVALENT

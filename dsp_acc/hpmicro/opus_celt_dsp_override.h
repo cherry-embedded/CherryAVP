@@ -3,8 +3,8 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-#ifndef OPUS_CELT_DSP_OVERRIDE_HPM_H
-#define OPUS_CELT_DSP_OVERRIDE_HPM_H
+#ifndef OPUS_CELT_DSP_OVERRIDE_H
+#define OPUS_CELT_DSP_OVERRIDE_H
 
 #include "nds32_intrinsic.h"
 
@@ -194,4 +194,4 @@ static OPUS_INLINE opus_val16 hpm_opus_celt_sround16(opus_val32 x, int shift)
 }
 #endif
 
-#endif /* OPUS_CELT_DSP_OVERRIDE_HPM_H */
+#endif /* OPUS_CELT_DSP_OVERRIDE_H */
