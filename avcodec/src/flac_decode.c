@@ -528,10 +528,6 @@ static FLAC__StreamDecoderWriteStatus flac_libflac_write_cb(const FLAC__StreamDe
         bits_per_sample == 0u || bits_per_sample > 32u) {
         return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
     }
-    if (samples > UINT32_MAX / channels ||
-        samples * channels > UINT32_MAX / (uint32_t)sizeof(int16_t)) {
-        return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
-    }
 
     required_size = samples * channels * (uint32_t)sizeof(int16_t);
     out_frame->require_size = required_size;
@@ -633,6 +629,17 @@ audio_codec_dec_handle_t flac_pcm_decode_open(const flac_dec_config_t *config)
         return NULL;
     }
 
+    if (!FLAC__stream_decoder_process_until_end_of_metadata(decoder->stream_decoder) ||
+        decoder->error_seen != 0u ||
+        decoder->stream_meta_pos < FLAC_NATIVE_STREAMINFO_SIZE ||
+        FLAC__stream_decoder_get_state(decoder->stream_decoder) !=
+            FLAC__STREAM_DECODER_SEARCH_FOR_FRAME_SYNC) {
+        FLAC__stream_decoder_finish(decoder->stream_decoder);
+        FLAC__stream_decoder_delete(decoder->stream_decoder);
+        avp_free(decoder);
+        return NULL;
+    }
+
     return (audio_codec_dec_handle_t)decoder;
 }
 
@@ -677,11 +684,6 @@ avp_status_t flac_pcm_decode_frame(audio_codec_dec_handle_t handle,
             return AVP_EBADFRAME;
         }
         return st;
-    }
-
-    if (frame.block_size > UINT32_MAX / (uint32_t)frame.channels ||
-        frame.block_size * (uint32_t)frame.channels > UINT32_MAX / (uint32_t)sizeof(int16_t)) {
-        return AVP_ERANGE;
     }
 
     out_frame->require_size = frame.block_size *

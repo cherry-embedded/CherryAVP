@@ -14,6 +14,8 @@ typedef struct {
     uint8_t bit_depth;
     uint8_t channels;
     uint32_t sample_rate;
+    uint8_t *decode_buffer;
+    uint32_t decode_buffer_size;
 } alac_decoder_t;
 
 static uint32_t alac_bytes_per_sample(uint8_t bit_depth)
@@ -47,13 +49,19 @@ static int16_t alac_sample_to_s16(const uint8_t *sample,
         return (int16_t)(value >> 16);
     }
 
+#if TARGET_RT_BIG_ENDIAN
     value = ((int32_t)sample[0] << 16) |
             ((int32_t)sample[1] << 8) |
             (int32_t)sample[2];
+#else
+    value = ((int32_t)sample[2] << 16) |
+            ((int32_t)sample[1] << 8) |
+            (int32_t)sample[0];
+#endif
     if ((value & 0x00800000) != 0) {
         value |= (int32_t)0xff000000;
     }
-    return (int16_t)(value >> (bit_depth == 20u ? 4 : 8));
+    return (int16_t)(value >> 8);
 }
 
 audio_codec_dec_handle_t alac_pcm_decode_open(const alac_dec_config_t *config)
@@ -107,6 +115,9 @@ void alac_pcm_decode_close(audio_codec_dec_handle_t handle)
         return;
     }
     delete decoder->decoder;
+    if (decoder->decode_buffer != NULL) {
+        avp_free(decoder->decode_buffer);
+    }
     avp_free(decoder);
 }
 
@@ -138,13 +149,31 @@ avp_status_t alac_pcm_decode_frame(audio_codec_dec_handle_t handle,
 
     bytes_per_sample = alac_bytes_per_sample(decoder->bit_depth);
     required_size = (uint64_t)decoder->frame_length * decoder->channels *
-                    bytes_per_sample;
-    out_frame->require_size = required_size;
+                    sizeof(int16_t);
+
+    out_frame->require_size = (uint32_t)required_size;
     if (out_frame->size < out_frame->require_size) {
         return AVP_EBUFFER;
     }
 
-    decoded_buffer = (uint8_t *)out_frame->buffer;
+    if (decoder->bit_depth == 16u) {
+        decoded_buffer = (uint8_t *)out_frame->buffer;
+    } else {
+        uint64_t decode_size = (uint64_t)decoder->frame_length *
+                               decoder->channels *
+                               bytes_per_sample;
+
+        if (decoder->decode_buffer_size < (uint32_t)decode_size) {
+            uint8_t *new_buffer = (uint8_t *)avp_realloc(decoder->decode_buffer,
+                                                         (uint32_t)decode_size);
+            if (new_buffer == NULL) {
+                return AVP_ENOMEM;
+            }
+            decoder->decode_buffer = new_buffer;
+            decoder->decode_buffer_size = (uint32_t)decode_size;
+        }
+        decoded_buffer = decoder->decode_buffer;
+    }
 
     BitBufferInit(&bits, in_frame->buffer, in_frame->size);
     status = decoder->decoder->Decode(&bits,

@@ -185,6 +185,13 @@ generate_test_files()
         -i "${input_wav}" -c:a alac "${out}" ||
         note "failed: ${out}"
 
+    note "Generating 24-bit caf-alac ..."
+    out="${outdir}/jinitaimei_alac_24bit.caf"
+    ffmpeg -hide_banner -loglevel error -y \
+        -i "${input_wav}" -sample_fmt s32p -bits_per_raw_sample 24 \
+        -c:a alac -f caf "${out}" ||
+        note "failed: ${out}"
+
     note "Generating AFE test PCM files..."
     ffmpeg -hide_banner -loglevel error -y \
         -stream_loop -1 -i "${EXAMPLE_FILES_DIR}/jinitaimei.wav" \
@@ -260,6 +267,7 @@ run_stream_case "stream_amr_wb" amr "${EXAMPLE_FILES_DIR}/amr_wb_min.awb"
 run_stream_case "stream_flac" flac "${TEST_FILES_DIR}/jinitaimei.flac"
 run_stream_case "stream_mp3" mp3 "${TEST_FILES_DIR}/jinitaimei.mp3"
 run_stream_case "stream_alac" alac "${TEST_FILES_DIR}/jinitaimei_alac.caf"
+run_stream_case "stream_alac_24bit" alac "${TEST_FILES_DIR}/jinitaimei_alac_24bit.caf"
 run_stream_case "stream_m4a" m4a "${TEST_FILES_DIR}/jinitaimei.m4a"
 run_stream_case "stream_ogg_opus" ogg "${TEST_FILES_DIR}/jinitaimei_opus.ogg"
 run_stream_case "stream_ogg_vorbis" ogg "${TEST_FILES_DIR}/jinitaimei_vorbis.ogg"

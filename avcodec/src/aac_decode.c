@@ -249,27 +249,24 @@ avp_status_t aac_pcm_decode_frame(audio_codec_dec_handle_t handle,
     decoder->ext.repositionFlag = decoder->first_frame != 0u ? TRUE : FALSE;
 
     if (!decoder->config.has_no_adts_header && decoder->first_frame != 0u) {
-        aac_dec_config_t adts_config;
-
-        memset(&adts_config, 0, sizeof(adts_config));
-        adts_config.sample_rate = frame.sample_rate;
-        adts_config.channels = frame.channels;
-
-        status = PVMP4SetAudioConfig(&decoder->ext,
-                                     decoder->mem,
-                                     1,
-                                     (Int)adts_config.sample_rate,
-                                     adts_config.channels,
-                                     MP4AUDIO_AAC_LC);
-        if (status != MP4AUDEC_SUCCESS) {
-            return AVP_EBADHEADER;
-        }
-        decoder->first_frame = 0u;
+        status = PVMP4AudioDecoderConfig(&decoder->ext, decoder->mem);
+    } else {
+        status = MP4AUDEC_INVALID_FRAME;
     }
-    status = PVMP4AudioDecodeFrame(&decoder->ext, decoder->mem);
+
+    if (status != MP4AUDEC_SUCCESS) {
+        decoder->ext.pInputBuffer = (UChar *)in_frame->buffer;
+        decoder->ext.inputBufferCurrentLength = (Int)frame.frame_size;
+        decoder->ext.inputBufferMaxLength = (Int)frame.frame_size;
+        decoder->ext.inputBufferUsedLength = 0;
+        decoder->ext.remainderBits = 0;
+        decoder->ext.repositionFlag = decoder->first_frame != 0u ? TRUE : FALSE;
+        status = PVMP4AudioDecodeFrame(&decoder->ext, decoder->mem);
+    }
     if (status != MP4AUDEC_SUCCESS) {
         return AVP_EBADFRAME;
     }
+    decoder->first_frame = 0u;
 
     out_frame->sample_rate = decoder->ext.samplingRate;
     out_frame->samples_per_channel = decoder->ext.frameLength;
