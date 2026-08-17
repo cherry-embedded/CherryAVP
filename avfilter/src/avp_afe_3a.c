@@ -19,35 +19,6 @@
 #define AVP_AFE_3A_MAX_BANDS          2u
 #define AVP_AFE_3A_AEC_SOUNDCARD_RATE 48000
 
-/*
- * The upstream WebRTC spl_init.c depends on pthread.  Embedded targets often
- * do not provide pthread_once.  The selected legacy algorithms only need the
- * generic C implementations, so initialize those pointers here and omit
- * spl_init.c from the build.
- */
-MaxAbsValueW16 WebRtcSpl_MaxAbsValueW16;
-MaxAbsValueW32 WebRtcSpl_MaxAbsValueW32;
-MaxValueW16 WebRtcSpl_MaxValueW16;
-MaxValueW32 WebRtcSpl_MaxValueW32;
-MinValueW16 WebRtcSpl_MinValueW16;
-MinValueW32 WebRtcSpl_MinValueW32;
-ScaleAndAddVectorsWithRound WebRtcSpl_ScaleAndAddVectorsWithRound;
-CrossCorrelation WebRtcSpl_CrossCorrelation;
-DownsampleFast WebRtcSpl_DownsampleFast;
-
-void WebRtcSpl_Init(void)
-{
-    WebRtcSpl_MaxAbsValueW16 = WebRtcSpl_MaxAbsValueW16C;
-    WebRtcSpl_MaxAbsValueW32 = WebRtcSpl_MaxAbsValueW32C;
-    WebRtcSpl_MaxValueW16 = WebRtcSpl_MaxValueW16C;
-    WebRtcSpl_MaxValueW32 = WebRtcSpl_MaxValueW32C;
-    WebRtcSpl_MinValueW16 = WebRtcSpl_MinValueW16C;
-    WebRtcSpl_MinValueW32 = WebRtcSpl_MinValueW32C;
-    WebRtcSpl_ScaleAndAddVectorsWithRound = WebRtcSpl_ScaleAndAddVectorsWithRoundC;
-    WebRtcSpl_CrossCorrelation = WebRtcSpl_CrossCorrelationC;
-    WebRtcSpl_DownsampleFast = WebRtcSpl_DownsampleFastC;
-}
-
 struct avp_afe_3a {
     avp_afe_3a_config_t config;
 
@@ -648,17 +619,6 @@ static void avp_afe_3a_i16_bands_to_float(avp_afe_3a_t *ctx,
     }
 }
 
-static void avp_afe_3a_copy_float_bands(avp_afe_3a_t *ctx,
-                                        float *const *dst,
-                                        float *const *src)
-{
-    uint32_t band;
-
-    for (band = 0u; band < ctx->num_bands; band++) {
-        memcpy(dst[band], src[band], (size_t)ctx->band_samples * sizeof(float));
-    }
-}
-
 static void avp_afe_3a_float_bands_to_i16(avp_afe_3a_t *ctx,
                                           float *const *float_bands,
                                           int16_t *const *i16_bands)
@@ -821,8 +781,15 @@ avp_status_t avp_afe_3a_process(avp_afe_3a_t *handle,
         handle->agc_mic_level = agc_level_in;
     }
 
-    avp_afe_3a_i16_bands_to_float(handle, handle->near_bands_i16,
-                                  handle->near_bands_f);
+#if defined(CONFIG_CHERRYAVP_AFE_3A_NS_FIXED)
+    if (handle->config.enable_aec != 0u && has_far) {
+#else
+    if ((handle->config.enable_aec != 0u && has_far) ||
+        handle->config.enable_ns != 0u) {
+#endif
+        avp_afe_3a_i16_bands_to_float(handle, handle->near_bands_i16,
+                                      handle->near_bands_f);
+    }
 
 #if !defined(CONFIG_CHERRYAVP_AFE_3A_NS_FIXED)
     if (handle->config.enable_ns != 0u) {
@@ -860,28 +827,35 @@ avp_status_t avp_afe_3a_process(avp_afe_3a_t *handle,
         }
     } else {
         handle->last_echo_status = 0;
-        avp_afe_3a_copy_float_bands(handle, handle->aec_bands_f,
-                                    handle->near_bands_f);
-        for (band = 0u; band < handle->num_bands; band++) {
-            process_bands_f[band] = handle->aec_bands_f[band];
+#if !defined(CONFIG_CHERRYAVP_AFE_3A_NS_FIXED)
+        if (handle->config.enable_ns != 0u) {
+            for (band = 0u; band < handle->num_bands; band++) {
+                process_bands_f[band] = handle->near_bands_f[band];
+            }
         }
+#endif
     }
 
 #if defined(CONFIG_CHERRYAVP_AFE_3A_NS_FIXED)
-    avp_afe_3a_float_bands_to_i16(handle, process_bands_f,
-                                  handle->pcm_bands_i16);
+    if (handle->config.enable_aec != 0u && has_far) {
+        avp_afe_3a_float_bands_to_i16(handle, process_bands_f,
+                                      handle->pcm_bands_i16);
+        for (band = 0u; band < handle->num_bands; band++) {
+            process_bands_i16[band] = handle->pcm_bands_i16[band];
+        }
+    } else {
+        for (band = 0u; band < handle->num_bands; band++) {
+            process_bands_i16[band] = handle->near_bands_i16[band];
+        }
+    }
 
     if (handle->config.enable_ns != 0u) {
         WebRtcNsx_Process(handle->ns,
-                          (const int16_t *const *)handle->pcm_bands_i16,
+                          (const int16_t *const *)process_bands_i16,
                           (int)handle->num_bands,
                           handle->ns_bands_i16);
         for (band = 0u; band < handle->num_bands; band++) {
             process_bands_i16[band] = handle->ns_bands_i16[band];
-        }
-    } else {
-        for (band = 0u; band < handle->num_bands; band++) {
-            process_bands_i16[band] = handle->pcm_bands_i16[band];
         }
     }
     avp_afe_3a_update_ns_metrics(handle);
@@ -893,21 +867,21 @@ avp_status_t avp_afe_3a_process(avp_afe_3a_t *handle,
         for (band = 0u; band < handle->num_bands; band++) {
             process_bands_f[band] = handle->ns_bands_f[band];
         }
-    } else {
-        avp_afe_3a_copy_float_bands(handle, handle->ns_bands_f,
-                                    process_bands_f);
+    }
+
+    if ((handle->config.enable_aec != 0u && has_far) ||
+        handle->config.enable_ns != 0u) {
+        avp_afe_3a_float_bands_to_i16(handle, process_bands_f,
+                                      handle->pcm_bands_i16);
         for (band = 0u; band < handle->num_bands; band++) {
-            process_bands_f[band] = handle->ns_bands_f[band];
+            process_bands_i16[band] = handle->pcm_bands_i16[band];
+        }
+    } else {
+        for (band = 0u; band < handle->num_bands; band++) {
+            process_bands_i16[band] = handle->near_bands_i16[band];
         }
     }
-
-    avp_afe_3a_float_bands_to_i16(handle, process_bands_f,
-                                  handle->pcm_bands_i16);
     avp_afe_3a_update_ns_metrics(handle);
-
-    for (band = 0u; band < handle->num_bands; band++) {
-        process_bands_i16[band] = handle->pcm_bands_i16[band];
-    }
 #endif
 
     if (handle->config.enable_vad != 0u) {
@@ -915,7 +889,7 @@ avp_status_t avp_afe_3a_process(avp_afe_3a_t *handle,
                                        handle->sample_rate == 32000u ?
                                            16000 :
                                            (int)handle->sample_rate,
-                                       handle->pcm_bands_i16[0],
+                                       process_bands_i16[0],
                                        (size_t)handle->band_samples);
         if (vad_result < 0) {
             vad_result = -1;
