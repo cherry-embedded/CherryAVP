@@ -3,8 +3,8 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-#if !defined(CONFIG_AVP_WEBRTC_OVERRIDE)
-#error "This file is only used when CONFIG_AVP_WEBRTC_OVERRIDE is defined"
+#if !defined(CONFIG_CHERRYAVP_WEBRTC_OVERRIDE)
+#error "This file is only used when CONFIG_CHERRYAVP_WEBRTC_OVERRIDE is defined"
 #endif
 
 #include "webrtc/modules/audio_processing/aec/aec_rdft.h"

@@ -52,7 +52,7 @@ static __inline int16_t WebRtcSpl_SubSatW16(int16_t var1, int16_t var2)
 
 static __inline int16_t WebRtcSpl_GetSizeInBits(uint32_t n)
 {
-    return n == 0 ? 0 : (int16_t)(32 - __builtin_clz(n));
+    return n == 0 ? 0 : (int16_t)(32 - __nds__clz32(n));
 }
 
 static __inline int16_t WebRtcSpl_NormW32(int32_t a)
@@ -64,12 +64,12 @@ static __inline int16_t WebRtcSpl_NormW32(int32_t a)
     }
 
     value = (uint32_t)(a < 0 ? ~a : a);
-    return (int16_t)(__builtin_clz(value) - 1);
+    return (int16_t)(__nds__clz32(value) - 1);
 }
 
 static __inline int16_t WebRtcSpl_NormU32(uint32_t a)
 {
-    return a == 0 ? 0 : (int16_t)__builtin_clz(a);
+    return a == 0 ? 0 : (int16_t)__nds__clz32(a);
 }
 
 static __inline int16_t WebRtcSpl_NormW16(int16_t a)
@@ -81,7 +81,7 @@ static __inline int16_t WebRtcSpl_NormW16(int16_t a)
     }
 
     value = a < 0 ? ~(int32_t)a : (int32_t)a;
-    return (int16_t)(__builtin_clz((uint32_t)value) - 17);
+    return (int16_t)(__nds__clz32((uint32_t)value) - 17);
 }
 
 #endif /* WEBRTC_DSP_OVERRIDE_H */

@@ -10,7 +10,7 @@
 #include "hpm_math.h"
 #include "webrtc/common_audio/signal_processing/include/signal_processing_library.h"
 
-int32_t WebRtcSpl_SqrtFloor(int32_t value)
+int32_t WebRtcSpl_Sqrt(int32_t value)
 {
     return hpm_dsp_sqrt_q31(value);
 }

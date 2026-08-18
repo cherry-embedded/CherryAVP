@@ -38,10 +38,10 @@ static void InitPointersToC() {
   WebRtcSpl_MaxValueW32 = WebRtcSpl_MaxValueW32C;
   WebRtcSpl_MinValueW16 = WebRtcSpl_MinValueW16C;
   WebRtcSpl_MinValueW32 = WebRtcSpl_MinValueW32C;
-  WebRtcSpl_CrossCorrelation = WebRtcSpl_CrossCorrelationC;
-  WebRtcSpl_DownsampleFast = WebRtcSpl_DownsampleFastC;
-  WebRtcSpl_ScaleAndAddVectorsWithRound =
-      WebRtcSpl_ScaleAndAddVectorsWithRoundC;
+  // WebRtcSpl_CrossCorrelation = WebRtcSpl_CrossCorrelationC;
+  // WebRtcSpl_DownsampleFast = WebRtcSpl_DownsampleFastC;
+  // WebRtcSpl_ScaleAndAddVectorsWithRound =
+  //     WebRtcSpl_ScaleAndAddVectorsWithRoundC;
 }
 #endif
 

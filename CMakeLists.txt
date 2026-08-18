@@ -17,4 +17,18 @@ sdk_compile_definitions(${CHERRYAVP_TARGET_PUBLIC_DEFINITION} ${CHERRYAVP_TARGET
 sdk_inc(${CHERRYAVP_TARGET_PUBLIC_INCLUDE} ${CHERRYAVP_TARGET_PRIVATE_INCLUDE})
 
 sdk_compile_options(${CHERRYAVP_TARGET_PRIVATE_OPTIONS})
+
+if(CONFIG_CHERRYAVP_WEBRTC_OVERRIDE)
+sdk_src(
+    ${CMAKE_CURRENT_SOURCE_DIR}/dsp_acc/hpmicro/webrtc_aec_core.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/dsp_acc/hpmicro/webrtc_aec_rdft.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/dsp_acc/hpmicro/webrtc_nsx_core.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/dsp_acc/hpmicro/webrtc_complex_bit_reverse.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/dsp_acc/hpmicro/webrtc_complex_fft.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/dsp_acc/hpmicro/webrtc_min_max_operations.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/dsp_acc/hpmicro/webrtc_spl_sqrt.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/dsp_acc/hpmicro/webrtc_spl_sqrt_floor.c
+)
+endif()
+
 endif()

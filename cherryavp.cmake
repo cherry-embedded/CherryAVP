@@ -106,28 +106,28 @@ set(WEBRTC_DIR ${CHERRYAVP_THIRD_PARTY_DIR}/webrtc)
 set(WEBRTC_AFE_SRC
     ${WEBRTC_DIR}/common_audio/ring_buffer.c
     ${WEBRTC_DIR}/common_audio/fft4g.c
-    ${WEBRTC_DIR}/common_audio/signal_processing/auto_corr_to_refl_coef.c
-    ${WEBRTC_DIR}/common_audio/signal_processing/auto_correlation.c
+    # ${WEBRTC_DIR}/common_audio/signal_processing/auto_corr_to_refl_coef.c
+    # ${WEBRTC_DIR}/common_audio/signal_processing/auto_correlation.c
     ${WEBRTC_DIR}/common_audio/signal_processing/complex_bit_reverse.c
     ${WEBRTC_DIR}/common_audio/signal_processing/complex_fft.c
     ${WEBRTC_DIR}/common_audio/signal_processing/copy_set_operations.c
-    ${WEBRTC_DIR}/common_audio/signal_processing/cross_correlation.c
+    # ${WEBRTC_DIR}/common_audio/signal_processing/cross_correlation.c
     ${WEBRTC_DIR}/common_audio/signal_processing/division_operations.c
     ${WEBRTC_DIR}/common_audio/signal_processing/dot_product_with_scale.c
-    ${WEBRTC_DIR}/common_audio/signal_processing/downsample_fast.c
+    # ${WEBRTC_DIR}/common_audio/signal_processing/downsample_fast.c
     ${WEBRTC_DIR}/common_audio/signal_processing/energy.c
-    ${WEBRTC_DIR}/common_audio/signal_processing/filter_ar.c
-    ${WEBRTC_DIR}/common_audio/signal_processing/filter_ar_fast_q12.c
-    ${WEBRTC_DIR}/common_audio/signal_processing/filter_ma_fast_q12.c
-    ${WEBRTC_DIR}/common_audio/signal_processing/get_hanning_window.c
+    # ${WEBRTC_DIR}/common_audio/signal_processing/filter_ar.c
+    # ${WEBRTC_DIR}/common_audio/signal_processing/filter_ar_fast_q12.c
+    # ${WEBRTC_DIR}/common_audio/signal_processing/filter_ma_fast_q12.c
+    # ${WEBRTC_DIR}/common_audio/signal_processing/get_hanning_window.c
     ${WEBRTC_DIR}/common_audio/signal_processing/get_scaling_square.c
-    ${WEBRTC_DIR}/common_audio/signal_processing/ilbc_specific_functions.c
-    ${WEBRTC_DIR}/common_audio/signal_processing/levinson_durbin.c
-    ${WEBRTC_DIR}/common_audio/signal_processing/lpc_to_refl_coef.c
+    # ${WEBRTC_DIR}/common_audio/signal_processing/ilbc_specific_functions.c
+    # ${WEBRTC_DIR}/common_audio/signal_processing/levinson_durbin.c
+    # ${WEBRTC_DIR}/common_audio/signal_processing/lpc_to_refl_coef.c
     ${WEBRTC_DIR}/common_audio/signal_processing/min_max_operations.c
     ${WEBRTC_DIR}/common_audio/signal_processing/randomization_functions.c
     ${WEBRTC_DIR}/common_audio/signal_processing/real_fft.c
-    ${WEBRTC_DIR}/common_audio/signal_processing/refl_coef_to_lpc.c
+    # ${WEBRTC_DIR}/common_audio/signal_processing/refl_coef_to_lpc.c
     ${WEBRTC_DIR}/common_audio/signal_processing/resample.c
     ${WEBRTC_DIR}/common_audio/signal_processing/resample_48khz.c
     ${WEBRTC_DIR}/common_audio/signal_processing/resample_by_2.c
@@ -137,8 +137,8 @@ set(WEBRTC_AFE_SRC
     ${WEBRTC_DIR}/common_audio/signal_processing/spl_sqrt.c
     ${WEBRTC_DIR}/common_audio/signal_processing/spl_sqrt_floor.c
     ${WEBRTC_DIR}/common_audio/signal_processing/splitting_filter.c
-    ${WEBRTC_DIR}/common_audio/signal_processing/sqrt_of_one_minus_x_squared.c
-    ${WEBRTC_DIR}/common_audio/signal_processing/vector_scaling_operations.c
+    # ${WEBRTC_DIR}/common_audio/signal_processing/sqrt_of_one_minus_x_squared.c
+    # ${WEBRTC_DIR}/common_audio/signal_processing/vector_scaling_operations.c
     ${WEBRTC_DIR}/common_audio/vad/webrtc_vad.c
     ${WEBRTC_DIR}/common_audio/vad/vad_core.c
     ${WEBRTC_DIR}/common_audio/vad/vad_filterbank.c
@@ -154,12 +154,13 @@ set(WEBRTC_AFE_SRC
     ${WEBRTC_DIR}/modules/audio_processing/agc/legacy/digital_agc.c
 )
 
-if(CONFIG_AVP_WEBRTC_OVERRIDE)
+if(CONFIG_CHERRYAVP_WEBRTC_OVERRIDE)
     list(REMOVE_ITEM WEBRTC_AFE_SRC
         ${WEBRTC_DIR}/common_audio/signal_processing/complex_bit_reverse.c
         ${WEBRTC_DIR}/common_audio/signal_processing/complex_fft.c
+        ${WEBRTC_DIR}/common_audio/signal_processing/min_max_operations.c
+        ${WEBRTC_DIR}/common_audio/signal_processing/spl_sqrt.c
         ${WEBRTC_DIR}/common_audio/signal_processing/spl_sqrt_floor.c
-        ${WEBRTC_DIR}/common_audio/signal_processing/spl_init.c
     )
 endif()
 
@@ -196,8 +197,11 @@ list(APPEND CHERRYAVP_TARGET_SRC
 list(APPEND CHERRYAVP_TARGET_PRIVATE_INCLUDE
     ${CHERRYAVP_THIRD_PARTY_DIR}
 )
+if(CONFIG_CHERRYAVP_WEBRTC_OVERRIDE)
+    list(APPEND CHERRYAVP_TARGET_PUBLIC_DEFINITION CONFIG_CHERRYAVP_WEBRTC_OVERRIDE)
+endif()
 if(CONFIG_CHERRYAVP_AFE_3A_NS_FIXED)
-    list(APPEND CHERRYAVP_TARGET_PRIVATE_DEFINITION CONFIG_CHERRYAVP_AFE_3A_NS_FIXED)
+    list(APPEND CHERRYAVP_TARGET_PUBLIC_DEFINITION CONFIG_CHERRYAVP_AFE_3A_NS_FIXED)
 endif()
 list(APPEND CHERRYAVP_TARGET_PUBLIC_DEFINITION CONFIG_CHERRYAVP_AFE_3A)
 endif()
@@ -364,8 +368,8 @@ list(APPEND CHERRYAVP_TARGET_PRIVATE_INCLUDE
 )
 list(APPEND CHERRYAVP_TARGET_PUBLIC_DEFINITION CONFIG_CHERRYAVP_AAC)
 
-if(CONFIG_AVP_AAC_PLUS)
-list(APPEND CHERRYAVP_TARGET_PUBLIC_DEFINITION CONFIG_AVP_AAC_PLUS)
+if(CONFIG_CHERRYAVP_AAC_PLUS)
+list(APPEND CHERRYAVP_TARGET_PUBLIC_DEFINITION CONFIG_CHERRYAVP_AAC_PLUS)
 
 list(APPEND CHERRYAVP_TARGET_PRIVATE_DEFINITION
     AAC_PLUS
@@ -846,6 +850,7 @@ TARGET_RT_LITTLE_ENDIAN=1
 TARGET_CPU_PPC=0
 TARGET_RT_BIG_ENDIAN=0
 TARGET_OS_MAC=0
+NDEBUG
 )
 endif()
 
@@ -956,7 +961,7 @@ list(REMOVE_DUPLICATES CHERRYAVP_TARGET_PUBLIC_DEFINITION)
 list(REMOVE_DUPLICATES CHERRYAVP_TARGET_PRIVATE_DEFINITION)
 
 list(APPEND CHERRYAVP_TARGET_PRIVATE_OPTIONS
-$<$<COMPILE_LANGUAGE:CXX>:-Wno-narrowing> -Wno-implicit-fallthrough -Wno-multichar
+-Wno-narrowing -Wno-implicit-fallthrough -Wno-multichar
 )
 
 add_library(CherryAVP STATIC ${CHERRYAVP_TARGET_SRC})
