@@ -42,6 +42,18 @@
 #include <stddef.h>
 #include <stdarg.h>
 
+#define FLAC__STRCASECMP strcasecmp
+#define FLAC__STRNCASECMP strncasecmp
+#define flac_restrict
+#define FLAC__U64L(x) x##ULL
+#ifndef M_LN2
+#define M_LN2 0.69314718055994530942
+#endif
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+#if 0
 #if defined _WIN32 && !defined __CYGWIN__
 /* where MSVC puts unlink() */
 # include <io.h>
@@ -242,6 +254,7 @@ int flac_snprintf(char *str, size_t size, const char *fmt, ...);
 int flac_vsnprintf(char *str, size_t size, const char *fmt, va_list va);
 #ifdef __cplusplus
 };
+#endif
 #endif
 
 #endif /* FLAC__SHARE__COMPAT_H */

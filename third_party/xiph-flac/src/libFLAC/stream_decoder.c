@@ -3309,7 +3309,7 @@ FLAC__bool read_subframe_verbatim_(FLAC__StreamDecoder *decoder, uint32_t channe
 FLAC__bool read_residual_partitioned_rice_(FLAC__StreamDecoder *decoder, uint32_t predictor_order, uint32_t partition_order, FLAC__EntropyCodingMethod_PartitionedRiceContents *partitioned_rice_contents, FLAC__int32 *residual, FLAC__bool is_extended)
 {
 	FLAC__uint32 rice_parameter;
-	int i;
+	FLAC__int32 i;
 	uint32_t partition, sample, u;
 	const uint32_t partitions = 1u << partition_order;
 	const uint32_t partition_samples = decoder->private_->frame.header.blocksize >> partition_order;
@@ -3332,7 +3332,7 @@ FLAC__bool read_residual_partitioned_rice_(FLAC__StreamDecoder *decoder, uint32_
 		if(rice_parameter < pesc) {
 			partitioned_rice_contents->raw_bits[partition] = 0;
 			u = (partition == 0) ? partition_samples - predictor_order : partition_samples;
-			if(!decoder->private_->local_bitreader_read_rice_signed_block(decoder->private_->input, residual + sample, u, rice_parameter)){
+			if(!decoder->private_->local_bitreader_read_rice_signed_block(decoder->private_->input, (int *)(residual + sample), u, rice_parameter)){
 				if(decoder->protected_->state == FLAC__STREAM_DECODER_READ_FRAME) {
 					/* no error was set, read_callback_ didn't set it, so
 					 * invalid rice symbol was found */

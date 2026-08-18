@@ -25,6 +25,22 @@
 
 #include "misc.h"
 
+#undef alloca
+#define alloca(x) __builtin_alloca(x)
+#define STIN static
+
+#ifndef M_PI
+#  define M_PI (3.1415926536f)
+#endif
+#ifndef min
+#  define min(x,y)  ((x)>(y)?(y):(x))
+#endif
+
+#ifndef max
+#  define max(x,y)  ((x)<(y)?(y):(x))
+#endif
+
+#if 0
 #ifndef _V_IFDEFJAIL_H_
 #  define _V_IFDEFJAIL_H_
 
@@ -185,5 +201,7 @@ STIN int vorbis_ftoi(double f){
 #  define vorbis_fpu_restore(vorbis_fpu_control) {}
 
 #endif /* default implementation */
+
+#endif
 
 #endif /* _OS_H */
