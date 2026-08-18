@@ -1461,7 +1461,7 @@ AecCore* WebRtcAec_CreateAec() {
   }
 #endif
 
-#if defined(CONFIG_AVP_WEBRTC_OVERRIDE)
+#if defined(CONFIG_CHERRYAVP_WEBRTC_OVERRIDE)
   WebRtcAec_InitAec_custom();
 #endif
   aec_rdft_init();

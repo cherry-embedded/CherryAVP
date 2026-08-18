@@ -586,7 +586,7 @@ void aec_rdft_init(void) {
     aec_rdft_init_neon();
   }
 #endif
-#if defined(CONFIG_AVP_WEBRTC_OVERRIDE)
+#if defined(CONFIG_CHERRYAVP_WEBRTC_OVERRIDE)
   aec_rdft_init_custom();
 #endif
 }

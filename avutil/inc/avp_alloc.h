@@ -12,7 +12,7 @@
 extern "C" {
 #endif
 
-#if CONFIG_AVP_DEBUG_MEMORY
+#if CONFIG_CHERRYAVP_DEBUG_MEMORY
 void *avp_malloc_dbg(size_t size, const char *file, const char *func, int line);
 void *avp_calloc_dbg(size_t nmemb, size_t size, const char *file, const char *func, int line);
 void *avp_realloc_dbg(void *ptr, size_t size, const char *file, const char *func, int line);

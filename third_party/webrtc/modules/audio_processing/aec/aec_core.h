@@ -61,7 +61,7 @@ void WebRtcAec_InitAec_mips(void);
 #if defined(WEBRTC_DETECT_NEON) || defined(WEBRTC_HAS_NEON)
 void WebRtcAec_InitAec_neon(void);
 #endif
-#if defined(CONFIG_AVP_WEBRTC_OVERRIDE)
+#if defined(CONFIG_CHERRYAVP_WEBRTC_OVERRIDE)
 void WebRtcAec_InitAec_custom(void);
 #endif
 

@@ -180,8 +180,8 @@ static int have_simd()
 {   /* TODO: detect neon for !MINIMP3_ONLY_SIMD */
     return 1;
 }
-#elif defined(CONFIG_AVP_MP3_DSP_OVERRIDE_INCLUDE)
-#include CONFIG_AVP_MP3_DSP_OVERRIDE_INCLUDE
+#elif defined(CONFIG_CHERRYAVP_MP3_DSP_OVERRIDE_INCLUDE)
+#include CONFIG_CHERRYAVP_MP3_DSP_OVERRIDE_INCLUDE
 #else /* SIMD checks... */
 #define HAVE_SSE 0
 #define HAVE_SIMD 0

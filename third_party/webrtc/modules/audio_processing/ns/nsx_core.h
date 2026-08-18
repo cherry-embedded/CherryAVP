@@ -256,7 +256,7 @@ void WebRtcNsx_Denormalize_mips(NoiseSuppressionFixedC* inst,
 
 #endif
 
-#if defined(CONFIG_AVP_WEBRTC_OVERRIDE)
+#if defined(CONFIG_CHERRYAVP_WEBRTC_OVERRIDE)
 void WebRtcNsx_Init_custom();
 #endif
 

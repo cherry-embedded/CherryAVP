@@ -15,8 +15,8 @@
 #ifndef WEBRTC_SPL_SPL_INL_H_
 #define WEBRTC_SPL_SPL_INL_H_
 
-#if defined(CONFIG_AVP_WEBRTC_DSP_OVERRIDE_INCLUDE)
-#include CONFIG_AVP_WEBRTC_DSP_OVERRIDE_INCLUDE
+#if defined(CONFIG_CHERRYAVP_WEBRTC_DSP_OVERRIDE_INCLUDE)
+#include CONFIG_CHERRYAVP_WEBRTC_DSP_OVERRIDE_INCLUDE
 #elif defined(WEBRTC_ARCH_ARM_V7)
 #include "webrtc/common_audio/signal_processing/include/spl_inl_armv7.h"
 #else
