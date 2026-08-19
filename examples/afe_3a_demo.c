@@ -126,7 +126,7 @@ static int run_demo(const char *near_path,
         goto out;
     }
 
-    if(avp_afe_3a_get_frame_samples(afe) != frame_samples) {
+    if (avp_afe_3a_get_frame_samples(afe) != frame_samples) {
         printf("avp_afe_3a_get_frame_samples failed\n");
         goto out;
     }

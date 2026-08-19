@@ -137,21 +137,19 @@ avp_status_t avp_ae_vol_control(avp_ae_vol_t *handle,
             if (arg == NULL) {
                 return AVP_EINVAL;
             }
-            {
-                avp_ae_vol_db_range_t *range = (avp_ae_vol_db_range_t *)arg;
-                avp_ae_vol_config_t old_config = handle->config;
-                avp_status_t st;
 
-                handle->config.min_db = range->min_db;
-                handle->config.max_db = range->max_db;
-                st = avp_ae_vol_build_table(handle);
-                if (st != AVP_OK) {
-                    handle->config = old_config;
-                    (void)avp_ae_vol_build_table(handle);
-                }
-                return st;
+            avp_ae_vol_db_range_t *range = (avp_ae_vol_db_range_t *)arg;
+            avp_ae_vol_config_t old_config = handle->config;
+            avp_status_t st;
+
+            handle->config.min_db = range->min_db;
+            handle->config.max_db = range->max_db;
+            st = avp_ae_vol_build_table(handle);
+            if (st != AVP_OK) {
+                handle->config = old_config;
+                (void)avp_ae_vol_build_table(handle);
             }
-
+            return st;
         case AVP_AE_VOL_CMD_GET_DB_RANGE:
             if (arg == NULL) {
                 return AVP_EINVAL;

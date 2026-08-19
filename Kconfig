@@ -112,6 +112,10 @@ config CHERRYAVP_AE_VOL
     bool "Enable AE Volume module"
     default y
 
+config CHERRYAVP_AE_FILTER
+    bool "Enable AE Filter module"
+    default y
+
 endmenu
 
 endif

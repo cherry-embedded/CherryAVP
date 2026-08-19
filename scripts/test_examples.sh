@@ -8,7 +8,7 @@ OUTPUT_ROOT="${OUTPUT_ROOT:-output}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 OUT_DIR="${OUTPUT_ROOT}/${RUN_ID}"
 LOG_DIR="${OUT_DIR}/logs"
-TEST_FILES_DIR="${OUT_DIR}/test_files"
+TEST_FILES_DIR="${OUTPUT_ROOT}/files"
 EXAMPLE_FILES_DIR="${ROOT_DIR}/examples/files"
 FRAME_COUNT="${FRAME_COUNT:-0}"
 
@@ -83,7 +83,7 @@ run_resample_case()
 
     run_case "${name}" "${artifact}" \
         "${BUILD_DIR}/examples/resample_demo" \
-        "${EXAMPLE_FILES_DIR}/jinitaimei.wav" "${output}" \
+        "${TEST_FILES_DIR}/jinitaimei.pcm" "${output}" \
         "${rate}" "${channels}" "${bits}" "${layout}" "${FRAME_COUNT}"
 }
 
@@ -101,6 +101,12 @@ generate_test_files()
     fi
 
     note "Generating ffmpeg test files into ${outdir}..."
+
+    note "Generating raw PCM input ..."
+    out="${outdir}/jinitaimei.pcm"
+    ffmpeg -hide_banner -loglevel error -y \
+        -i "${input_wav}" -ar 44100 -ac 2 -f s16le "${out}" ||
+        note "failed: ${out}"
 
     note "Generating aac ..."
     out="${outdir}/jinitaimei.aac"
@@ -194,12 +200,56 @@ generate_test_files()
 
     note "Generating AFE test PCM files..."
     ffmpeg -hide_banner -loglevel error -y \
-        -stream_loop -1 -i "${EXAMPLE_FILES_DIR}/jinitaimei.wav" \
+        -stream_loop -1 -i "${input_wav}" \
         -f lavfi -i "sine=frequency=440:duration=5" \
         -f lavfi -i "anoisesrc=color=pink:duration=5:amplitude=0.08" \
         -filter_complex "[0:a]aresample=16000,pan=mono|c0=0.5*c0+0.5*c1,atrim=duration=5,asetpts=PTS-STARTPTS[voice];[1:a]asplit=2[far][farecho];[farecho]aecho=0.9:0.95:40|80|120:0.5|0.35|0.2[echoed];[voice][echoed][2:a]amix=inputs=3:duration=first[near]" \
-        -map "[far]" -ar 16000 -ac 1 -f s16le "${TEST_FILES_DIR}/afe_far.pcm" \
-        -map "[near]" -ar 16000 -ac 1 -f s16le "${TEST_FILES_DIR}/afe_near.pcm"
+        -map "[far]" -ar 16000 -ac 1 -f s16le "${TEST_FILES_DIR}/jinitaimei_afe_far.pcm" \
+        -map "[near]" -ar 16000 -ac 1 -f s16le "${TEST_FILES_DIR}/jinitaimei_afe_near.pcm"
+
+    note "Generating howling suppression PCM..."
+    out="${outdir}/jinitaimei_howling.pcm"
+    ffmpeg -hide_banner -loglevel error -y \
+        -stream_loop -1 -i "${input_wav}" \
+        -f lavfi -i "sine=frequency=2600:sample_rate=44100:duration=8" \
+        -filter_complex "[0:a]atrim=duration=8,asetpts=PTS-STARTPTS[voice];[1:a]volume=0.8[howl];[voice][howl]amix=inputs=2:duration=first:normalize=0[mix]" \
+        -map "[mix]" -ar 44100 -ac 2 -f s16le "${out}" ||
+        note "failed: ${out}"
+
+    note "Generating filter low/high test PCM..."
+    out="${outdir}/filter_low_high_tones.pcm"
+    ffmpeg -hide_banner -loglevel error -y \
+        -f lavfi -i "sine=frequency=500:sample_rate=44100:duration=8" \
+        -f lavfi -i "sine=frequency=10000:sample_rate=44100:duration=8" \
+        -filter_complex "[0:a]volume=0.65[low];[1:a]volume=0.35[high];[low][high]amix=inputs=2:duration=first:normalize=0[mix]" \
+        -map "[mix]" -ar 44100 -ac 2 -f s16le "${out}" ||
+        note "failed: ${out}"
+
+    note "Generating filter low/mid/high test PCM..."
+    out="${outdir}/filter_low_mid_high_tones.pcm"
+    ffmpeg -hide_banner -loglevel error -y \
+        -f lavfi -i "sine=frequency=500:sample_rate=44100:duration=8" \
+        -f lavfi -i "sine=frequency=6000:sample_rate=44100:duration=8" \
+        -f lavfi -i "sine=frequency=10000:sample_rate=44100:duration=8" \
+        -filter_complex "[0:a]volume=0.45[low];[1:a]volume=0.35[mid];[2:a]volume=0.25[high];[low][mid][high]amix=inputs=3:duration=first:normalize=0[mix]" \
+        -map "[mix]" -ar 44100 -ac 2 -f s16le "${out}" ||
+        note "failed: ${out}"
+
+    note "Generating mixer second input PCM..."
+    out="${outdir}/jinitaimei_mixer_b.pcm"
+    ffmpeg -hide_banner -loglevel error -y \
+        -i "${input_wav}" -af "volume=0.45" \
+        -ar 44100 -ac 2 -f s16le "${out}" ||
+        note "failed: ${out}"
+
+    note "Generating dynamics test PCM..."
+    out="${outdir}/jinitaimei_dynamics.pcm"
+    ffmpeg -hide_banner -loglevel error -y \
+        -stream_loop -1 -i "${input_wav}" \
+        -f lavfi -i "sine=frequency=440:sample_rate=44100:duration=8" \
+        -filter_complex "[0:a]atrim=duration=8,volume=0.9[voice];[1:a]volume=0.65[tone];[voice][tone]amix=inputs=2:duration=first:normalize=0[mix]" \
+        -map "[mix]" -ar 44100 -ac 2 -f s16le "${out}" ||
+        note "failed: ${out}"
 }
 
 note "CherryAVC example test"
@@ -234,30 +284,100 @@ note ""
 note "AFE 3A demo"
 run_case "afe_3a_demo" "${OUT_DIR}/afe_3a_demo.pcm" \
     "${BUILD_DIR}/examples/afe_3a_demo" \
-    "${TEST_FILES_DIR}/afe_near.pcm" "${TEST_FILES_DIR}/afe_far.pcm" \
+    "${TEST_FILES_DIR}/jinitaimei_afe_near.pcm" "${TEST_FILES_DIR}/jinitaimei_afe_far.pcm" \
     "${OUT_DIR}/afe_3a_demo.pcm" 16000 "${FRAME_COUNT}"
 
 note ""
 note "AE Sonic demo"
-run_case "sonic_speed" "${OUT_DIR}/sonic_speed.wav" \
+run_case "sonic_speed" "${OUT_DIR}/sonic_speed.pcm" \
     "${BUILD_DIR}/examples/ae_sonic_demo" \
-    "${EXAMPLE_FILES_DIR}/jinitaimei.wav" "${OUT_DIR}/sonic_speed.wav" \
+    "${TEST_FILES_DIR}/jinitaimei.pcm" "${OUT_DIR}/sonic_speed.pcm" \
     1.35 1.00 1.00 "${FRAME_COUNT}"
-run_case "sonic_pitch" "${OUT_DIR}/sonic_pitch.wav" \
+run_case "sonic_pitch" "${OUT_DIR}/sonic_pitch.pcm" \
     "${BUILD_DIR}/examples/ae_sonic_demo" \
-    "${EXAMPLE_FILES_DIR}/jinitaimei.wav" "${OUT_DIR}/sonic_pitch.wav" \
+    "${TEST_FILES_DIR}/jinitaimei.pcm" "${OUT_DIR}/sonic_pitch.pcm" \
     1.00 1.20 1.00 "${FRAME_COUNT}"
 
 note ""
 note "AE Volume demo"
-run_case "ae_vol_down" "${OUT_DIR}/ae_vol_down.wav" \
+run_case "ae_vol_down" "${OUT_DIR}/ae_vol_down.pcm" \
     "${BUILD_DIR}/examples/ae_vol_demo" \
-    "${EXAMPLE_FILES_DIR}/jinitaimei.wav" "${OUT_DIR}/ae_vol_down.wav" \
+    "${TEST_FILES_DIR}/jinitaimei.pcm" "${OUT_DIR}/ae_vol_down.pcm" \
     128 -60 18 "${FRAME_COUNT}"
-run_case "ae_vol_up" "${OUT_DIR}/ae_vol_up.wav" \
+run_case "ae_vol_up" "${OUT_DIR}/ae_vol_up.pcm" \
     "${BUILD_DIR}/examples/ae_vol_demo" \
-    "${EXAMPLE_FILES_DIR}/jinitaimei.wav" "${OUT_DIR}/ae_vol_up.wav" \
+    "${TEST_FILES_DIR}/jinitaimei.pcm" "${OUT_DIR}/ae_vol_up.pcm" \
     240 -60 18 "${FRAME_COUNT}"
+
+note ""
+note "AE Howling suppression demo"
+run_case "ae_howling" "${OUT_DIR}/ae_howling.pcm" \
+    "${BUILD_DIR}/examples/ae_howling_demo" \
+    "${TEST_FILES_DIR}/jinitaimei_howling.pcm" "${OUT_DIR}/ae_howling.pcm" \
+    6 12 4 "${FRAME_COUNT}"
+
+note ""
+note "AE EQ demo"
+run_case "ae_eq" "${OUT_DIR}/ae_eq.pcm" \
+    "${BUILD_DIR}/examples/ae_eq_demo" \
+    "${TEST_FILES_DIR}/jinitaimei.pcm" "${OUT_DIR}/ae_eq.pcm" "${FRAME_COUNT}"
+
+note ""
+note "AE Filter demo"
+filter_types=(
+    low_pass
+    high_pass
+    band_pass
+    band_stop
+    all_pass
+    peaking
+    low_shelf
+    high_shelf
+)
+filter_inputs=(
+    filter_low_high_tones.pcm
+    filter_low_high_tones.pcm
+    filter_low_mid_high_tones.pcm
+    filter_low_mid_high_tones.pcm
+    filter_low_mid_high_tones.pcm
+    filter_low_mid_high_tones.pcm
+    filter_low_mid_high_tones.pcm
+    filter_low_mid_high_tones.pcm
+)
+for filter_type in "${!filter_types[@]}"; do
+    filter_name="${filter_types[${filter_type}]}"
+    filter_input="${filter_inputs[${filter_type}]}"
+    run_case "ae_filter_${filter_name}" "${OUT_DIR}/ae_filter_${filter_name}.pcm" \
+        "${BUILD_DIR}/examples/ae_filter_demo" \
+        "${TEST_FILES_DIR}/${filter_input}" \
+        "${OUT_DIR}/ae_filter_${filter_name}.pcm" \
+        "${FRAME_COUNT}" "${filter_type}"
+done
+
+note ""
+note "AE Mixer demo"
+run_case "ae_mixer" "${OUT_DIR}/ae_mixer.pcm" \
+    "${BUILD_DIR}/examples/ae_mixer_demo" \
+    "${TEST_FILES_DIR}/jinitaimei.pcm" "${TEST_FILES_DIR}/jinitaimei_mixer_b.pcm" \
+    "${OUT_DIR}/ae_mixer.pcm" 0.75 0.50 "${FRAME_COUNT}"
+
+note ""
+note "AE Reverb demo"
+run_case "ae_reverb" "${OUT_DIR}/ae_reverb.pcm" \
+    "${BUILD_DIR}/examples/ae_reverb_demo" \
+    "${TEST_FILES_DIR}/jinitaimei.pcm" "${OUT_DIR}/ae_reverb.pcm" "${FRAME_COUNT}"
+
+note ""
+note "AE Compressor demo"
+run_case "ae_compressor" "${OUT_DIR}/ae_compressor.pcm" \
+    "${BUILD_DIR}/examples/ae_compressor_demo" \
+    "${TEST_FILES_DIR}/jinitaimei_dynamics.pcm" "${OUT_DIR}/ae_compressor.pcm" "${FRAME_COUNT}"
+
+note ""
+note "AE Limiter demo"
+run_case "ae_limiter" "${OUT_DIR}/ae_limiter.pcm" \
+    "${BUILD_DIR}/examples/ae_limiter_demo" \
+    "${TEST_FILES_DIR}/jinitaimei_dynamics.pcm" "${OUT_DIR}/ae_limiter.pcm" "${FRAME_COUNT}"
 
 note ""
 note "audio_codec_stream_demo"

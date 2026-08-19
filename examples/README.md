@@ -33,6 +33,29 @@ ffmpeg -hide_banner -y \
 `near.pcm` 是麦克风输入（jinitaimei 人声 + 440Hz 回声 + 粉红噪声），
 `far.pcm` 是扬声器参考信号，输出为 16-bit 单声道 PCM。
 
+## Audio effects
+
+示例构建包含八个 PCM 音频效果例程：
+
+```bash
+./ae_sonic_demo input.pcm sonic_out.pcm 1.35 1.00 1.00 0
+./ae_vol_demo input.pcm vol_out.pcm 192 -60 18 0
+./ae_howling_demo input.pcm howling_out.pcm 6 12 4 0
+./ae_eq_demo input.pcm eq_out.pcm 0
+./ae_mixer_demo input_a.pcm input_b.pcm mixer_out.pcm 0.75 0.50 0
+./ae_reverb_demo input.pcm reverb_out.pcm 0
+./ae_compressor_demo input.pcm compressor_out.pcm 0
+./ae_limiter_demo input.pcm limiter_out.pcm 0
+```
+
+所有输入和输出均为无文件头的 44.1 kHz、双声道、signed 16-bit little-endian 交错 PCM。
+`ae_mixer_demo` 要求两路输入使用相同格式和时长。测试脚本会在 `output/files`
+目录生成 `jinitaimei.pcm`、第二路混音 PCM、包含 2.6 kHz 音调的啸叫 PCM，以及供压缩器和
+限制器使用的动态测试 PCM。
+
+这八个例程分别在各自的 `ae_*_demo.c` 中完成裸 PCM 读取、PCM 写出、参数解析和滤镜调用，
+可以独立裁剪、编译和移植。
+
 下面的命令默认输出到当前目录。需要覆盖已有文件时，在命令中增加 `-y`。
 
 ## PCM WAV

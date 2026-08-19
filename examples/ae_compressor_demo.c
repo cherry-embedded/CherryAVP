@@ -1,72 +1,47 @@
-/* Standalone volume example for raw 44.1 kHz stereo S16LE PCM. */
-#include <limits.h>
+/* Standalone compressor example for raw 44.1 kHz stereo S16LE PCM. */
 #include <stdlib.h>
 
 #include "tlsf_port.h"
-#include "avp_ae_vol.h"
+#include "avp_ae_compressor.h"
 
 #define PCM_SAMPLE_RATE    44100u
 #define PCM_CHANNELS       2u
 #define PCM_BUFFER_SAMPLES 4096u
 #define DEFAULT_INPUT      "../output/files/jinitaimei.pcm"
 
-static int parse_u32(const char *text, uint32_t min, uint32_t max, uint32_t *value)
+static int parse_u32(const char *text, uint32_t *value)
 {
     char *end = NULL;
     unsigned long parsed = strtoul(text, &end, 0);
 
-    if (end == text || *end != '\0' || parsed < min || parsed > max)
+    if (end == text || *end != '\0' || parsed > UINT32_MAX)
         return -1;
     *value = (uint32_t)parsed;
-    return 0;
-}
-
-static int parse_i32(const char *text, int min, int max, int *value)
-{
-    char *end = NULL;
-    long parsed = strtol(text, &end, 0);
-
-    if (end == text || *end != '\0' || parsed < min || parsed > max)
-        return -1;
-    *value = (int)parsed;
     return 0;
 }
 
 int main(int argc, char **argv)
 {
     const char *input_path = DEFAULT_INPUT;
-    const char *output_path = "vol_out.pcm";
-    uint8_t volume_index = 192u;
-    int min_db = AVP_AE_VOL_DEFAULT_MIN_DB;
-    int max_db = AVP_AE_VOL_DEFAULT_MAX_DB;
+    const char *output_path = "compressor_out.pcm";
     uint32_t max_blocks = 0u;
-    uint32_t parsed;
     uint32_t blocks = 0u;
     uint32_t total_samples = 0u;
     int16_t buffer[PCM_BUFFER_SAMPLES];
     FILE *input = NULL;
     FILE *output = NULL;
-    avp_ae_vol_t *volume = NULL;
-    avp_ae_vol_config_t config;
+    avp_ae_compressor_t *compressor = NULL;
+    avp_ae_compressor_config_t config;
     avp_status_t st;
     int result = 1;
 
-    if (argc > 7)
+    if (argc > 4)
         goto usage;
     if (argc > 1)
         input_path = argv[1];
     if (argc > 2)
         output_path = argv[2];
-    if (argc > 3) {
-        if (parse_u32(argv[3], 0u, 255u, &parsed) != 0)
-            goto usage;
-        volume_index = (uint8_t)parsed;
-    }
-    if (argc > 4 && parse_i32(argv[4], -120, 60, &min_db) != 0)
-        goto usage;
-    if (argc > 5 && parse_i32(argv[5], -120, 60, &max_db) != 0)
-        goto usage;
-    if (argc > 6 && parse_u32(argv[6], 0u, UINT32_MAX, &max_blocks) != 0)
+    if (argc > 3 && parse_u32(argv[3], &max_blocks) != 0)
         goto usage;
 
     avp_mem_init();
@@ -82,13 +57,17 @@ int main(int argc, char **argv)
     }
 
     memset(&config, 0, sizeof(config));
-    config.min_db = min_db;
-    config.max_db = max_db;
-    config.index = volume_index;
+    config.sample_rate = PCM_SAMPLE_RATE;
+    config.channels = PCM_CHANNELS;
+    config.threshold_db = -18.0f;
+    config.ratio = 4.0f;
+    config.attack_ms = 8.0f;
+    config.release_ms = 120.0f;
+    config.makeup_db = 3.0f;
     config.enable = 1u;
-    st = avp_ae_vol_open(&config, &volume);
+    st = avp_ae_compressor_open(&config, &compressor);
     if (st != AVP_OK) {
-        printf("avp_ae_vol_open failed: %d\n", (int)st);
+        printf("avp_ae_compressor_open failed: %d\n", (int)st);
         goto out;
     }
 
@@ -97,9 +76,9 @@ int main(int argc, char **argv)
         samples -= samples % PCM_CHANNELS;
         if (samples == 0u)
             break;
-        st = avp_ae_vol_process(volume, buffer, buffer, (uint32_t)samples);
+        st = avp_ae_compressor_process(compressor, buffer, buffer, (uint32_t)samples);
         if (st != AVP_OK) {
-            printf("avp_ae_vol_process failed: %d\n", (int)st);
+            printf("avp_ae_compressor_process failed: %d\n", (int)st);
             goto out;
         }
         if (fwrite(buffer, sizeof(buffer[0]), samples, output) != samples) {
@@ -110,21 +89,22 @@ int main(int argc, char **argv)
         blocks++;
     }
 
-    int32_t gain_q14 = 0;
-    st = avp_ae_vol_control(volume, AVP_AE_VOL_CMD_GET_GAIN_Q14, &gain_q14);
+    float threshold_db = 0.0f;
+    st = avp_ae_compressor_control(compressor,
+                                   AVP_AE_COMPRESSOR_CMD_GET_THRESHOLD_DB,
+                                   &threshold_db);
     if (st != AVP_OK) {
-        printf("avp_ae_vol_control failed: %d\n", (int)st);
+        printf("avp_ae_compressor_control failed: %d\n", (int)st);
         goto out;
     }
-    printf("vol done: blocks=%u, samples=%u, sample_rate=%u, channels=%u, index=%u, range=%d..%d dB, gain_q14=%d\n",
+    printf("compressor done: blocks=%u, samples=%u, sample_rate=%u, channels=%u, threshold=%.1f dB\n",
            (unsigned int)blocks, (unsigned int)total_samples,
            (unsigned int)PCM_SAMPLE_RATE, (unsigned int)PCM_CHANNELS,
-           (unsigned int)volume_index, min_db, max_db, (int)gain_q14);
-
+           (double)threshold_db);
     result = 0;
 
 out:
-    avp_ae_vol_close(volume);
+    avp_ae_compressor_close(compressor);
     if (output != NULL && fclose(output) != 0 && result == 0)
         result = 1;
     if (input != NULL)
@@ -132,7 +112,6 @@ out:
     return result;
 
 usage:
-    printf("usage: %s [input.pcm] [output.pcm] [index] [min_db] [max_db] [max_blocks]\n",
-           argv[0]);
+    printf("usage: %s [input.pcm] [output.pcm] [max_blocks]\n", argv[0]);
     return 1;
 }

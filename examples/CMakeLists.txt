@@ -35,6 +35,13 @@ set(CONFIG_CHERRYAVP_SWR 1)
 set(CONFIG_CHERRYAVP_AFE_3A 1)
 set(CONFIG_CHERRYAVP_AE_SONIC 1)
 set(CONFIG_CHERRYAVP_AE_VOL 1)
+set(CONFIG_CHERRYAVP_AE_HOWLING 1)
+set(CONFIG_CHERRYAVP_AE_EQ 1)
+set(CONFIG_CHERRYAVP_AE_FILTER 1)
+set(CONFIG_CHERRYAVP_AE_MIXER 1)
+set(CONFIG_CHERRYAVP_AE_REVERB 1)
+set(CONFIG_CHERRYAVP_AE_COMPRESSOR 1)
+set(CONFIG_CHERRYAVP_AE_LIMITER 1)
 #set(CONFIG_CHERRYAVP_MP3_DECODER_OPENCORE 1)
 #set(CONFIG_CHERRYAVP_AAC_PLUS 1)
 #set(CONFIG_CHERRYAVP_AFE_3A_NS_FIXED 1)
@@ -63,6 +70,34 @@ endif()
 
 if(CONFIG_CHERRYAVP_AE_VOL)
 cherryavp_example(ae_vol_demo ae_vol_demo.c)
+endif()
+
+if(CONFIG_CHERRYAVP_AE_HOWLING)
+cherryavp_example(ae_howling_demo ae_howling_demo.c)
+endif()
+
+if(CONFIG_CHERRYAVP_AE_EQ)
+cherryavp_example(ae_eq_demo ae_eq_demo.c)
+endif()
+
+if(CONFIG_CHERRYAVP_AE_FILTER)
+cherryavp_example(ae_filter_demo ae_filter_demo.c)
+endif()
+
+if(CONFIG_CHERRYAVP_AE_MIXER)
+cherryavp_example(ae_mixer_demo ae_mixer_demo.c)
+endif()
+
+if(CONFIG_CHERRYAVP_AE_REVERB)
+cherryavp_example(ae_reverb_demo ae_reverb_demo.c)
+endif()
+
+if(CONFIG_CHERRYAVP_AE_COMPRESSOR)
+cherryavp_example(ae_compressor_demo ae_compressor_demo.c)
+endif()
+
+if(CONFIG_CHERRYAVP_AE_LIMITER)
+cherryavp_example(ae_limiter_demo ae_limiter_demo.c)
 endif()
 
 if(CONFIG_CHERRYAVP_WAV)

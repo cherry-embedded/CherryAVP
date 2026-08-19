@@ -6,18 +6,19 @@
 #include "avp_swr.h"
 
 #define AVP_RESAMPLE_TMP_COUNT 4u
+#define AVP_SWR_PI             3.14159265358979323846
+#define AVP_SWR_SINC_RADIUS    8u
 
 typedef struct {
-    avp_audio_format_t fmt;
     uint8_t **planes;
     uint8_t plane_count;
-    uint32_t capacity_samples;
-} avp_audio_buffer_t;
+    size_t plane_bytes;
+} avp_swr_buffer_t;
 
 struct avp_swr_context {
     avp_audio_format_t in_fmt;
     avp_audio_format_t out_fmt;
-    avp_audio_buffer_t tmp[AVP_RESAMPLE_TMP_COUNT];
+    avp_swr_buffer_t tmp[AVP_RESAMPLE_TMP_COUNT];
 };
 
 static inline avp_status_t avp_swr_check_format(const avp_audio_format_t *fmt)
@@ -34,9 +35,52 @@ static inline avp_status_t avp_swr_check_format(const avp_audio_format_t *fmt)
     return AVP_OK;
 }
 
+static inline int avp_swr_check_sample_params(uint8_t channels, uint16_t bits_per_sample)
+{
+    return channels != 0u &&
+           avp_swr_get_sample_bytes(bits_per_sample) != 0u;
+}
+
+static inline int avp_swr_check_planar_buffer(const void *const data[], uint8_t channels)
+{
+    uint8_t ch;
+
+    if (data == NULL || channels == 0u) {
+        return 0;
+    }
+
+    for (ch = 0u; ch < channels; ch++) {
+        if (data[ch] == NULL) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
 static inline uint8_t avp_swr_get_plane_count(const avp_audio_format_t *fmt)
 {
     return fmt->sample_layout == AVP_SAMPLE_LAYOUT_PLANAR ? fmt->channels : 1u;
+}
+
+static inline int avp_swr_check_buffer(const avp_audio_format_t *fmt,
+                                       const void *const data[])
+{
+    uint8_t planes;
+    uint8_t i;
+
+    if (fmt == NULL || data == NULL) {
+        return 0;
+    }
+
+    planes = avp_swr_get_plane_count(fmt);
+    for (i = 0u; i < planes; i++) {
+        if (data[i] == NULL) {
+            return 0;
+        }
+    }
+
+    return 1;
 }
 
 static inline avp_status_t avp_swr_get_plane_size(const avp_audio_format_t *fmt,
@@ -74,47 +118,7 @@ static inline avp_status_t avp_swr_get_plane_size(const avp_audio_format_t *fmt,
     return AVP_OK;
 }
 
-static inline int avp_swr_check_input(const avp_audio_format_t *fmt,
-                                      const void *const data[])
-{
-    uint8_t planes;
-    uint8_t i;
-
-    if (fmt == NULL || data == NULL) {
-        return 0;
-    }
-
-    planes = avp_swr_get_plane_count(fmt);
-    for (i = 0u; i < planes; i++) {
-        if (data[i] == NULL) {
-            return 0;
-        }
-    }
-
-    return 1;
-}
-
-static inline int avp_swr_check_output(const avp_audio_format_t *fmt,
-                                       void *const data[])
-{
-    uint8_t planes;
-    uint8_t i;
-
-    if (fmt == NULL || data == NULL) {
-        return 0;
-    }
-
-    planes = avp_swr_get_plane_count(fmt);
-    for (i = 0u; i < planes; i++) {
-        if (data[i] == NULL) {
-            return 0;
-        }
-    }
-
-    return 1;
-}
-
-static inline void avp_audio_buffer_free(avp_audio_buffer_t *buffer)
+static inline void avp_swr_buffer_free(avp_swr_buffer_t *buffer)
 {
     uint8_t i;
 
@@ -132,52 +136,43 @@ static inline void avp_audio_buffer_free(avp_audio_buffer_t *buffer)
     memset(buffer, 0, sizeof(*buffer));
 }
 
-static inline avp_status_t avp_audio_buffer_prepare(avp_audio_buffer_t *buffer,
-                                                    const avp_audio_format_t *fmt,
-                                                    uint32_t samples)
+static inline avp_status_t avp_swr_buffer_prepare(avp_swr_buffer_t *buffer,
+                                                  const avp_audio_format_t *fmt,
+                                                  uint32_t samples)
 {
     uint8_t plane_count;
     uint8_t plane;
+    size_t plane_bytes;
 
     if (buffer == NULL || avp_swr_check_format(fmt) != AVP_OK) {
         return AVP_EINVAL;
     }
 
     plane_count = avp_swr_get_plane_count(fmt);
+    if (avp_swr_get_plane_size(fmt, samples, 0u, &plane_bytes) != AVP_OK) {
+        return AVP_EINVAL;
+    }
+
     if (buffer->planes != NULL &&
-        buffer->capacity_samples >= samples &&
         buffer->plane_count == plane_count &&
-        buffer->fmt.channels == fmt->channels &&
-        buffer->fmt.bits_per_sample == fmt->bits_per_sample &&
-        buffer->fmt.sample_layout == fmt->sample_layout) {
-        buffer->fmt = *fmt;
+        buffer->plane_bytes >= plane_bytes) {
         return AVP_OK;
     }
 
-    avp_audio_buffer_free(buffer);
+    avp_swr_buffer_free(buffer);
 
     buffer->planes = (uint8_t **)avp_calloc(plane_count, sizeof(buffer->planes[0]));
     if (buffer->planes == NULL) {
         return AVP_ENOMEM;
     }
     buffer->plane_count = plane_count;
-    buffer->fmt = *fmt;
-    buffer->capacity_samples = samples;
+    buffer->plane_bytes = plane_bytes;
 
     for (plane = 0u; plane < plane_count; plane++) {
-        size_t plane_size;
-        avp_status_t st;
-
-        st = avp_swr_get_plane_size(fmt, samples, plane, &plane_size);
-        if (st != AVP_OK) {
-            avp_audio_buffer_free(buffer);
-            return st;
-        }
-
-        if (plane_size != 0u) {
-            buffer->planes[plane] = (uint8_t *)avp_malloc(plane_size);
+        if (plane_bytes != 0u) {
+            buffer->planes[plane] = (uint8_t *)avp_malloc(plane_bytes);
             if (buffer->planes[plane] == NULL) {
-                avp_audio_buffer_free(buffer);
+                avp_swr_buffer_free(buffer);
                 return AVP_ENOMEM;
             }
         }
@@ -186,46 +181,32 @@ static inline avp_status_t avp_audio_buffer_prepare(avp_audio_buffer_t *buffer,
     return AVP_OK;
 }
 
-static inline const uint8_t *avp_swr_get_interleaved_input_sample_ptr(const void *data,
-                                                                      uint32_t sample_idx,
-                                                                      uint8_t ch,
-                                                                      uint8_t channels,
-                                                                      uint16_t bits_per_sample)
+static inline avp_status_t avp_audio_copy(const avp_audio_format_t *fmt,
+                                          const void *const in[],
+                                          void *const out[],
+                                          uint32_t samples)
 {
-    uint8_t bytes = avp_swr_get_sample_bytes(bits_per_sample);
+    uint8_t planes;
+    uint8_t plane;
 
-    return (const uint8_t *)data + ((size_t)sample_idx * channels + ch) * bytes;
-}
+    if (!avp_swr_check_buffer(fmt, in) ||
+        !avp_swr_check_buffer(fmt, (const void *const *)out)) {
+        return AVP_EINVAL;
+    }
 
-static inline uint8_t *avp_swr_get_interleaved_output_sample_ptr(void *data,
-                                                                 uint32_t sample_idx,
-                                                                 uint8_t ch,
-                                                                 uint8_t channels,
-                                                                 uint16_t bits_per_sample)
-{
-    uint8_t bytes = avp_swr_get_sample_bytes(bits_per_sample);
+    planes = avp_swr_get_plane_count(fmt);
+    for (plane = 0u; plane < planes; plane++) {
+        size_t plane_size;
+        avp_status_t st;
 
-    return (uint8_t *)data + ((size_t)sample_idx * channels + ch) * bytes;
-}
+        st = avp_swr_get_plane_size(fmt, samples, plane, &plane_size);
+        if (st != AVP_OK) {
+            return st;
+        }
+        memmove(out[plane], in[plane], plane_size);
+    }
 
-static inline const uint8_t *avp_swr_get_planar_input_sample_ptr(const void *const data[],
-                                                                 uint32_t sample_idx,
-                                                                 uint8_t ch,
-                                                                 uint16_t bits_per_sample)
-{
-    uint8_t bytes = avp_swr_get_sample_bytes(bits_per_sample);
-
-    return (const uint8_t *)data[ch] + (size_t)sample_idx * bytes;
-}
-
-static inline uint8_t *avp_swr_get_planar_output_sample_ptr(void *const data[],
-                                                            uint32_t sample_idx,
-                                                            uint8_t ch,
-                                                            uint16_t bits_per_sample)
-{
-    uint8_t bytes = avp_swr_get_sample_bytes(bits_per_sample);
-
-    return (uint8_t *)data[ch] + (size_t)sample_idx * bytes;
+    return AVP_OK;
 }
 
 static inline int32_t avp_clip_s32(int64_t sample)
@@ -261,8 +242,29 @@ static inline uint8_t avp_clip_u8(int32_t sample)
     return (uint8_t)sample;
 }
 
-static inline int32_t avp_swr_read_sample_q31(const uint8_t *sample,
-                                              uint16_t bits_per_sample)
+static inline const uint8_t *avp_swr_get_interleaved_sample_ptr(const void *data,
+                                                                uint32_t sample_idx,
+                                                                uint8_t ch,
+                                                                uint8_t channels,
+                                                                uint16_t bits_per_sample)
+{
+    uint8_t bytes = avp_swr_get_sample_bytes(bits_per_sample);
+
+    return (const uint8_t *)data + ((size_t)sample_idx * channels + ch) * bytes;
+}
+
+static inline const uint8_t *avp_swr_get_planar_sample_ptr(const void *const data[],
+                                                           uint32_t sample_idx,
+                                                           uint8_t ch,
+                                                           uint16_t bits_per_sample)
+{
+    uint8_t bytes = avp_swr_get_sample_bytes(bits_per_sample);
+
+    return (const uint8_t *)data[ch] + (size_t)sample_idx * bytes;
+}
+
+static inline int32_t avp_swr_read_sample(const uint8_t *sample,
+                                          uint16_t bits_per_sample)
 {
     switch (bits_per_sample) {
         case 8u:
@@ -284,9 +286,9 @@ static inline int32_t avp_swr_read_sample_q31(const uint8_t *sample,
     }
 }
 
-static inline void avp_swr_write_sample_q31(uint8_t *dst,
-                                            uint16_t bits_per_sample,
-                                            int32_t sample)
+static inline void avp_swr_write_sample(uint8_t *dst,
+                                        uint16_t bits_per_sample,
+                                        int32_t sample)
 {
     switch (bits_per_sample) {
         case 8u: {
@@ -309,216 +311,311 @@ static inline void avp_swr_write_sample_q31(uint8_t *dst,
     }
 }
 
-static inline int32_t avp_swr_read_interleaved_sample_q31(const void *data,
-                                                          uint32_t sample_idx,
+static inline int32_t avp_swr_read_interleaved_sample(const void *data,
+                                                      uint32_t sample_idx,
+                                                      uint8_t ch,
+                                                      uint8_t channels,
+                                                      uint16_t bits_per_sample)
+{
+    const uint8_t *sample_ptr;
+
+    sample_ptr = avp_swr_get_interleaved_sample_ptr(data,
+                                                    sample_idx,
+                                                    ch,
+                                                    channels,
+                                                    bits_per_sample);
+    return avp_swr_read_sample(sample_ptr, bits_per_sample);
+}
+
+static inline void avp_swr_write_interleaved_sample(void *data,
+                                                    uint32_t sample_idx,
+                                                    uint8_t ch,
+                                                    uint8_t channels,
+                                                    uint16_t bits_per_sample,
+                                                    int32_t sample)
+{
+    uint8_t *sample_ptr;
+
+    sample_ptr = (uint8_t *)avp_swr_get_interleaved_sample_ptr(data,
+                                                               sample_idx,
+                                                               ch,
+                                                               channels,
+                                                               bits_per_sample);
+    avp_swr_write_sample(sample_ptr, bits_per_sample, sample);
+}
+
+static inline int32_t avp_swr_read_planar_sample(const void *const data[],
+                                                 uint32_t sample_idx,
+                                                 uint8_t ch,
+                                                 uint16_t bits_per_sample)
+{
+    const uint8_t *sample_ptr;
+
+    sample_ptr = avp_swr_get_planar_sample_ptr(data,
+                                               sample_idx,
+                                               ch,
+                                               bits_per_sample);
+    return avp_swr_read_sample(sample_ptr, bits_per_sample);
+}
+
+static inline void avp_swr_write_planar_sample(void *const data[],
+                                               uint32_t sample_idx,
+                                               uint8_t ch,
+                                               uint16_t bits_per_sample,
+                                               int32_t sample)
+{
+    uint8_t *sample_ptr;
+
+    sample_ptr = (uint8_t *)avp_swr_get_planar_sample_ptr((const void *const *)data,
+                                                          sample_idx,
+                                                          ch,
+                                                          bits_per_sample);
+    avp_swr_write_sample(sample_ptr, bits_per_sample, sample);
+}
+
+static inline double avp_swr_sinc(double x)
+{
+    if (x == 0.0) {
+        return 1.0;
+    }
+
+    x *= AVP_SWR_PI;
+    return sin(x) / x;
+}
+
+static inline double avp_swr_sinc_window(double distance)
+{
+    double abs_distance;
+
+    abs_distance = fabs(distance);
+    if (abs_distance > (double)AVP_SWR_SINC_RADIUS) {
+        return 0.0;
+    }
+
+    return 0.5 * (1.0 + cos(AVP_SWR_PI * abs_distance / (double)AVP_SWR_SINC_RADIUS));
+}
+
+static inline double avp_swr_sinc_weight(double distance, double cutoff)
+{
+    return cutoff * avp_swr_sinc(cutoff * distance) * avp_swr_sinc_window(distance);
+}
+
+static inline int32_t avp_swr_clip_q31(double sample)
+{
+    if (sample > (double)INT32_MAX) {
+        return INT32_MAX;
+    }
+    if (sample < (double)INT32_MIN) {
+        return INT32_MIN;
+    }
+    return (int32_t)(sample >= 0.0 ? sample + 0.5 : sample - 0.5);
+}
+
+static inline double avp_swr_resample_cutoff(uint32_t src_sample_rate,
+                                             uint32_t dst_sample_rate)
+{
+    if (src_sample_rate <= dst_sample_rate) {
+        return 1.0;
+    }
+
+    return (double)dst_sample_rate / (double)src_sample_rate;
+}
+
+static inline int32_t avp_swr_resample_interleaved_sample(const void *in,
+                                                          uint32_t sample,
                                                           uint8_t ch,
                                                           uint8_t channels,
-                                                          uint16_t bits_per_sample)
+                                                          uint16_t bits_per_sample,
+                                                          uint32_t in_samples,
+                                                          uint32_t src_sample_rate,
+                                                          uint32_t dst_sample_rate)
 {
-    return avp_swr_read_sample_q31(avp_swr_get_interleaved_input_sample_ptr(data,
-                                                                            sample_idx,
-                                                                            ch,
-                                                                            channels,
-                                                                            bits_per_sample),
-                                   bits_per_sample);
+    double cutoff;
+    double sample_sum;
+    double src_pos;
+    double weight_sum;
+    int64_t center;
+    int64_t idx;
+
+    src_pos = ((double)sample * (double)src_sample_rate) / (double)dst_sample_rate;
+    center = (int64_t)src_pos;
+    if (center < 0) {
+        center = 0;
+    } else if (center >= (int64_t)in_samples) {
+        center = (int64_t)in_samples - 1;
+    }
+
+    cutoff = avp_swr_resample_cutoff(src_sample_rate, dst_sample_rate);
+    sample_sum = 0.0;
+    weight_sum = 0.0;
+
+    for (idx = center - (int64_t)AVP_SWR_SINC_RADIUS;
+         idx <= center + (int64_t)AVP_SWR_SINC_RADIUS;
+         idx++) {
+        double weight;
+
+        if (idx < 0 || idx >= (int64_t)in_samples) {
+            continue;
+        }
+
+        weight = avp_swr_sinc_weight(src_pos - (double)idx, cutoff);
+        if (weight == 0.0) {
+            continue;
+        }
+
+        sample_sum += (double)avp_swr_read_interleaved_sample(in,
+                                                              (uint32_t)idx,
+                                                              ch,
+                                                              channels,
+                                                              bits_per_sample) *
+                      weight;
+        weight_sum += weight;
+    }
+
+    if (weight_sum == 0.0) {
+        return avp_swr_read_interleaved_sample(in,
+                                               (uint32_t)center,
+                                               ch,
+                                               channels,
+                                               bits_per_sample);
+    }
+
+    return avp_swr_clip_q31(sample_sum / weight_sum);
 }
 
-static inline void avp_swr_write_interleaved_sample_q31(void *data,
-                                                        uint32_t sample_idx,
-                                                        uint8_t ch,
-                                                        uint8_t channels,
-                                                        uint16_t bits_per_sample,
-                                                        int32_t sample)
-{
-    avp_swr_write_sample_q31(avp_swr_get_interleaved_output_sample_ptr(data,
-                                                                       sample_idx,
-                                                                       ch,
-                                                                       channels,
-                                                                       bits_per_sample),
-                             bits_per_sample,
-                             sample);
-}
-
-static inline int32_t avp_swr_read_planar_sample_q31(const void *const data[],
-                                                     uint32_t sample_idx,
+static inline int32_t avp_swr_resample_planar_sample(const void *const in[],
+                                                     uint32_t sample,
                                                      uint8_t ch,
-                                                     uint16_t bits_per_sample)
+                                                     uint16_t bits_per_sample,
+                                                     uint32_t in_samples,
+                                                     uint32_t src_sample_rate,
+                                                     uint32_t dst_sample_rate)
 {
-    return avp_swr_read_sample_q31(avp_swr_get_planar_input_sample_ptr(data,
-                                                                       sample_idx,
-                                                                       ch,
-                                                                       bits_per_sample),
-                                   bits_per_sample);
-}
+    double cutoff;
+    double sample_sum;
+    double src_pos;
+    double weight_sum;
+    int64_t center;
+    int64_t idx;
 
-static inline void avp_swr_write_planar_sample_q31(void *const data[],
-                                                   uint32_t sample_idx,
-                                                   uint8_t ch,
-                                                   uint16_t bits_per_sample,
-                                                   int32_t sample)
-{
-    avp_swr_write_sample_q31(avp_swr_get_planar_output_sample_ptr(data,
-                                                                  sample_idx,
-                                                                  ch,
-                                                                  bits_per_sample),
-                             bits_per_sample,
-                             sample);
-}
-
-static inline int32_t avp_lerp_q31(int32_t a, int32_t b, uint32_t frac, uint32_t div)
-{
-    int64_t delta;
-
-    if (frac == 0u || div == 0u) {
-        return a;
+    src_pos = ((double)sample * (double)src_sample_rate) / (double)dst_sample_rate;
+    center = (int64_t)src_pos;
+    if (center < 0) {
+        center = 0;
+    } else if (center >= (int64_t)in_samples) {
+        center = (int64_t)in_samples - 1;
     }
 
-    delta = (int64_t)b - a;
-    return avp_clip_s32((int64_t)a + (delta * frac) / div);
-}
+    cutoff = avp_swr_resample_cutoff(src_sample_rate, dst_sample_rate);
+    sample_sum = 0.0;
+    weight_sum = 0.0;
 
-static inline avp_status_t avp_audio_copy(const avp_audio_format_t *fmt,
-                                          const void *const in[],
-                                          void *const out[],
-                                          uint32_t samples)
-{
-    uint8_t planes;
-    uint8_t plane;
+    for (idx = center - (int64_t)AVP_SWR_SINC_RADIUS;
+         idx <= center + (int64_t)AVP_SWR_SINC_RADIUS;
+         idx++) {
+        double weight;
 
-    if (!avp_swr_check_input(fmt, in) ||
-        !avp_swr_check_output(fmt, out)) {
-        return AVP_EINVAL;
-    }
-
-    planes = avp_swr_get_plane_count(fmt);
-    for (plane = 0u; plane < planes; plane++) {
-        size_t plane_size;
-        avp_status_t st;
-
-        st = avp_swr_get_plane_size(fmt, samples, plane, &plane_size);
-        if (st != AVP_OK) {
-            return st;
+        if (idx < 0 || idx >= (int64_t)in_samples) {
+            continue;
         }
-        memmove(out[plane], in[plane], plane_size);
-    }
 
-    return AVP_OK;
-}
-
-static inline int avp_swr_check_sample_params(uint8_t channels, uint16_t bits_per_sample)
-{
-    return channels != 0u &&
-           avp_swr_get_sample_bytes(bits_per_sample) != 0u;
-}
-
-static inline int avp_swr_check_planar_input(const void *const data[], uint8_t channels)
-{
-    uint8_t ch;
-
-    if (data == NULL || channels == 0u) {
-        return 0;
-    }
-
-    for (ch = 0u; ch < channels; ch++) {
-        if (data[ch] == NULL) {
-            return 0;
+        weight = avp_swr_sinc_weight(src_pos - (double)idx, cutoff);
+        if (weight == 0.0) {
+            continue;
         }
+
+        sample_sum += (double)avp_swr_read_planar_sample(in,
+                                                         (uint32_t)idx,
+                                                         ch,
+                                                         bits_per_sample) *
+                      weight;
+        weight_sum += weight;
     }
 
-    return 1;
+    if (weight_sum == 0.0) {
+        return avp_swr_read_planar_sample(in,
+                                          (uint32_t)center,
+                                          ch,
+                                          bits_per_sample);
+    }
+
+    return avp_swr_clip_q31(sample_sum / weight_sum);
 }
 
-static inline int avp_swr_check_planar_output(void *const data[], uint8_t channels)
-{
-    uint8_t ch;
-
-    if (data == NULL || channels == 0u) {
-        return 0;
-    }
-
-    for (ch = 0u; ch < channels; ch++) {
-        if (data[ch] == NULL) {
-            return 0;
-        }
-    }
-
-    return 1;
-}
-
-static int32_t avp_swr_read_mixed_interleaved_channel_q31(const void *in,
-                                                          uint32_t sample,
-                                                          uint8_t out_ch,
-                                                          uint8_t src_channels,
-                                                          uint8_t dst_channels,
-                                                          uint16_t bits_per_sample)
+static int32_t avp_swr_read_mixed_interleaved_channel(const void *in,
+                                                      uint32_t sample,
+                                                      uint8_t out_ch,
+                                                      uint8_t src_channels,
+                                                      uint8_t dst_channels,
+                                                      uint16_t bits_per_sample)
 {
     uint8_t ch;
     int64_t mixed;
 
     if (src_channels == 1u) {
-        return avp_swr_read_interleaved_sample_q31(in, sample, 0u, src_channels, bits_per_sample);
+        return avp_swr_read_interleaved_sample(in, sample, 0u, src_channels, bits_per_sample);
     }
 
     if (dst_channels == 1u) {
         mixed = 0;
         for (ch = 0u; ch < src_channels; ch++) {
-            mixed += avp_swr_read_interleaved_sample_q31(in,
-                                                         sample,
-                                                         ch,
-                                                         src_channels,
-                                                         bits_per_sample);
-        }
-        return avp_clip_s32(mixed / src_channels);
-    }
-
-    if (out_ch < src_channels) {
-        return avp_swr_read_interleaved_sample_q31(in,
-                                                   sample,
-                                                   out_ch,
-                                                   src_channels,
-                                                   bits_per_sample);
-    }
-
-    mixed = 0;
-    for (ch = 0u; ch < src_channels; ch++) {
-        mixed += avp_swr_read_interleaved_sample_q31(in,
+            mixed += avp_swr_read_interleaved_sample(in,
                                                      sample,
                                                      ch,
                                                      src_channels,
                                                      bits_per_sample);
-    }
-    return avp_clip_s32(mixed / src_channels);
-}
-
-static int32_t avp_swr_read_mixed_planar_channel_q31(const void *const in[],
-                                                     uint32_t sample,
-                                                     uint8_t out_ch,
-                                                     uint8_t src_channels,
-                                                     uint8_t dst_channels,
-                                                     uint16_t bits_per_sample)
-{
-    uint8_t ch;
-    int64_t mixed;
-
-    if (src_channels == 1u) {
-        return avp_swr_read_planar_sample_q31(in, sample, 0u, bits_per_sample);
-    }
-
-    if (dst_channels == 1u) {
-        mixed = 0;
-        for (ch = 0u; ch < src_channels; ch++) {
-            mixed += avp_swr_read_planar_sample_q31(in, sample, ch, bits_per_sample);
         }
         return avp_clip_s32(mixed / src_channels);
     }
 
     if (out_ch < src_channels) {
-        return avp_swr_read_planar_sample_q31(in, sample, out_ch, bits_per_sample);
+        return avp_swr_read_interleaved_sample(in,
+                                               sample,
+                                               out_ch,
+                                               src_channels,
+                                               bits_per_sample);
     }
 
     mixed = 0;
     for (ch = 0u; ch < src_channels; ch++) {
-        mixed += avp_swr_read_planar_sample_q31(in, sample, ch, bits_per_sample);
+        mixed += avp_swr_read_interleaved_sample(in,
+                                                 sample,
+                                                 ch,
+                                                 src_channels,
+                                                 bits_per_sample);
+    }
+    return avp_clip_s32(mixed / src_channels);
+}
+
+static int32_t avp_swr_read_mixed_planar_channel(const void *const in[],
+                                                 uint32_t sample,
+                                                 uint8_t out_ch,
+                                                 uint8_t src_channels,
+                                                 uint8_t dst_channels,
+                                                 uint16_t bits_per_sample)
+{
+    uint8_t ch;
+    int64_t mixed;
+
+    if (src_channels == 1u) {
+        return avp_swr_read_planar_sample(in, sample, 0u, bits_per_sample);
+    }
+
+    if (dst_channels == 1u) {
+        mixed = 0;
+        for (ch = 0u; ch < src_channels; ch++) {
+            mixed += avp_swr_read_planar_sample(in, sample, ch, bits_per_sample);
+        }
+        return avp_clip_s32(mixed / src_channels);
+    }
+
+    if (out_ch < src_channels) {
+        return avp_swr_read_planar_sample(in, sample, out_ch, bits_per_sample);
+    }
+
+    mixed = 0;
+    for (ch = 0u; ch < src_channels; ch++) {
+        mixed += avp_swr_read_planar_sample(in, sample, ch, bits_per_sample);
     }
     return avp_clip_s32(mixed / src_channels);
 }
@@ -533,25 +630,22 @@ avp_status_t avp_bits_convert_interleaved(uint16_t src_bits_per_sample,
     uint32_t sample;
     uint8_t ch;
 
-    if (!avp_swr_check_sample_params(channels, src_bits_per_sample) ||
-        avp_swr_get_sample_bytes(dst_bits_per_sample) == 0u ||
-        in == NULL ||
-        out == NULL) {
+    if (in == NULL || out == NULL) {
         return AVP_EINVAL;
     }
 
     for (sample = 0u; sample < samples; sample++) {
         for (ch = 0u; ch < channels; ch++) {
-            avp_swr_write_interleaved_sample_q31(out,
-                                                 sample,
-                                                 ch,
-                                                 channels,
-                                                 dst_bits_per_sample,
-                                                 avp_swr_read_interleaved_sample_q31(in,
-                                                                                     sample,
-                                                                                     ch,
-                                                                                     channels,
-                                                                                     src_bits_per_sample));
+            avp_swr_write_interleaved_sample(out,
+                                             sample,
+                                             ch,
+                                             channels,
+                                             dst_bits_per_sample,
+                                             avp_swr_read_interleaved_sample(in,
+                                                                             sample,
+                                                                             ch,
+                                                                             channels,
+                                                                             src_bits_per_sample));
         }
     }
 
@@ -568,23 +662,21 @@ avp_status_t avp_bits_convert_planar(uint16_t src_bits_per_sample,
     uint32_t sample;
     uint8_t ch;
 
-    if (!avp_swr_check_sample_params(channels, src_bits_per_sample) ||
-        avp_swr_get_sample_bytes(dst_bits_per_sample) == 0u ||
-        !avp_swr_check_planar_input(in, channels) ||
-        !avp_swr_check_planar_output(out, channels)) {
+    if (!avp_swr_check_planar_buffer(in, channels) ||
+        !avp_swr_check_planar_buffer((const void *const *)out, channels)) {
         return AVP_EINVAL;
     }
 
     for (ch = 0u; ch < channels; ch++) {
         for (sample = 0u; sample < samples; sample++) {
-            avp_swr_write_planar_sample_q31(out,
-                                            sample,
-                                            ch,
-                                            dst_bits_per_sample,
-                                            avp_swr_read_planar_sample_q31(in,
-                                                                           sample,
-                                                                           ch,
-                                                                           src_bits_per_sample));
+            avp_swr_write_planar_sample(out,
+                                        sample,
+                                        ch,
+                                        dst_bits_per_sample,
+                                        avp_swr_read_planar_sample(in,
+                                                                   sample,
+                                                                   ch,
+                                                                   src_bits_per_sample));
         }
     }
 
@@ -601,26 +693,23 @@ avp_status_t avp_channel_convert_interleaved(uint8_t src_channels,
     uint32_t sample;
     uint8_t ch;
 
-    if (!avp_swr_check_sample_params(src_channels, bits_per_sample) ||
-        dst_channels == 0u ||
-        in == NULL ||
-        out == NULL) {
+    if (in == NULL || out == NULL) {
         return AVP_EINVAL;
     }
 
     for (sample = 0u; sample < samples; sample++) {
         for (ch = 0u; ch < dst_channels; ch++) {
-            avp_swr_write_interleaved_sample_q31(out,
-                                                 sample,
-                                                 ch,
-                                                 dst_channels,
-                                                 bits_per_sample,
-                                                 avp_swr_read_mixed_interleaved_channel_q31(in,
-                                                                                            sample,
-                                                                                            ch,
-                                                                                            src_channels,
-                                                                                            dst_channels,
-                                                                                            bits_per_sample));
+            avp_swr_write_interleaved_sample(out,
+                                             sample,
+                                             ch,
+                                             dst_channels,
+                                             bits_per_sample,
+                                             avp_swr_read_mixed_interleaved_channel(in,
+                                                                                    sample,
+                                                                                    ch,
+                                                                                    src_channels,
+                                                                                    dst_channels,
+                                                                                    bits_per_sample));
         }
     }
 
@@ -637,25 +726,23 @@ avp_status_t avp_channel_convert_planar(uint8_t src_channels,
     uint32_t sample;
     uint8_t ch;
 
-    if (!avp_swr_check_sample_params(src_channels, bits_per_sample) ||
-        dst_channels == 0u ||
-        !avp_swr_check_planar_input(in, src_channels) ||
-        !avp_swr_check_planar_output(out, dst_channels)) {
+    if (!avp_swr_check_planar_buffer(in, src_channels) ||
+        !avp_swr_check_planar_buffer((const void *const *)out, dst_channels)) {
         return AVP_EINVAL;
     }
 
     for (ch = 0u; ch < dst_channels; ch++) {
         for (sample = 0u; sample < samples; sample++) {
-            avp_swr_write_planar_sample_q31(out,
-                                            sample,
-                                            ch,
-                                            bits_per_sample,
-                                            avp_swr_read_mixed_planar_channel_q31(in,
-                                                                                  sample,
-                                                                                  ch,
-                                                                                  src_channels,
-                                                                                  dst_channels,
-                                                                                  bits_per_sample));
+            avp_swr_write_planar_sample(out,
+                                        sample,
+                                        ch,
+                                        bits_per_sample,
+                                        avp_swr_read_mixed_planar_channel(in,
+                                                                          sample,
+                                                                          ch,
+                                                                          src_channels,
+                                                                          dst_channels,
+                                                                          bits_per_sample));
         }
     }
 
@@ -675,13 +762,7 @@ avp_status_t avp_sample_rate_convert_interleaved(uint32_t src_sample_rate,
     uint32_t produced;
     uint8_t ch;
 
-    if (src_sample_rate == 0u ||
-        dst_sample_rate == 0u ||
-        !avp_swr_check_sample_params(channels, bits_per_sample) ||
-        in == NULL ||
-        out == NULL ||
-        out_samples == NULL ||
-        in_samples == 0u) {
+    if (in == NULL || out == NULL || out_samples == NULL) {
         return AVP_EINVAL;
     }
 
@@ -689,7 +770,7 @@ avp_status_t avp_sample_rate_convert_interleaved(uint32_t src_sample_rate,
                                        dst_sample_rate,
                                        in_samples);
 
-    if (src_sample_rate == dst_sample_rate || produced == in_samples) {
+    if (src_sample_rate == dst_sample_rate) {
         memmove(out,
                 in,
                 (size_t)in_samples * channels *
@@ -699,35 +780,23 @@ avp_status_t avp_sample_rate_convert_interleaved(uint32_t src_sample_rate,
     }
 
     for (sample = 0u; sample < produced; sample++) {
-        uint64_t pos = (uint64_t)sample * src_sample_rate;
-        uint32_t index = (uint32_t)(pos / dst_sample_rate);
-        uint32_t frac = (uint32_t)(pos % dst_sample_rate);
-
-        if (index >= in_samples) {
-            index = in_samples - 1u;
-            frac = 0u;
-        }
-
         for (ch = 0u; ch < channels; ch++) {
-            int32_t a = avp_swr_read_interleaved_sample_q31(in,
-                                                            index,
-                                                            ch,
-                                                            channels,
-                                                            bits_per_sample);
-            int32_t b = index + 1u < in_samples ?
-                            avp_swr_read_interleaved_sample_q31(in,
-                                                                index + 1u,
-                                                                ch,
-                                                                channels,
-                                                                bits_per_sample) :
-                            a;
+            int32_t value;
 
-            avp_swr_write_interleaved_sample_q31(out,
-                                                 sample,
-                                                 ch,
-                                                 channels,
-                                                 bits_per_sample,
-                                                 avp_lerp_q31(a, b, frac, dst_sample_rate));
+            value = avp_swr_resample_interleaved_sample(in,
+                                                        sample,
+                                                        ch,
+                                                        channels,
+                                                        bits_per_sample,
+                                                        in_samples,
+                                                        src_sample_rate,
+                                                        dst_sample_rate);
+            avp_swr_write_interleaved_sample(out,
+                                             sample,
+                                             ch,
+                                             channels,
+                                             bits_per_sample,
+                                             value);
         }
     }
 
@@ -748,11 +817,8 @@ avp_status_t avp_sample_rate_convert_planar(uint32_t src_sample_rate,
     uint32_t produced;
     uint8_t ch;
 
-    if (src_sample_rate == 0u ||
-        dst_sample_rate == 0u ||
-        !avp_swr_check_sample_params(channels, bits_per_sample) ||
-        !avp_swr_check_planar_input(in, channels) ||
-        !avp_swr_check_planar_output(out, channels) ||
+    if (!avp_swr_check_planar_buffer(in, channels) ||
+        !avp_swr_check_planar_buffer((const void *const *)out, channels) ||
         out_samples == NULL ||
         in_samples == 0u) {
         return AVP_EINVAL;
@@ -762,7 +828,7 @@ avp_status_t avp_sample_rate_convert_planar(uint32_t src_sample_rate,
                                        dst_sample_rate,
                                        in_samples);
 
-    if (src_sample_rate == dst_sample_rate || produced == in_samples) {
+    if (src_sample_rate == dst_sample_rate) {
         uint8_t bytes = avp_swr_get_sample_bytes(bits_per_sample);
 
         for (ch = 0u; ch < channels; ch++) {
@@ -774,26 +840,20 @@ avp_status_t avp_sample_rate_convert_planar(uint32_t src_sample_rate,
 
     for (ch = 0u; ch < channels; ch++) {
         for (sample = 0u; sample < produced; sample++) {
-            uint64_t pos = (uint64_t)sample * src_sample_rate;
-            uint32_t index = (uint32_t)(pos / dst_sample_rate);
-            uint32_t frac = (uint32_t)(pos % dst_sample_rate);
-            int32_t a;
-            int32_t b;
+            int32_t value;
 
-            if (index >= in_samples) {
-                index = in_samples - 1u;
-                frac = 0u;
-            }
-
-            a = avp_swr_read_planar_sample_q31(in, index, ch, bits_per_sample);
-            b = index + 1u < in_samples ?
-                    avp_swr_read_planar_sample_q31(in, index + 1u, ch, bits_per_sample) :
-                    a;
-            avp_swr_write_planar_sample_q31(out,
-                                            sample,
-                                            ch,
-                                            bits_per_sample,
-                                            avp_lerp_q31(a, b, frac, dst_sample_rate));
+            value = avp_swr_resample_planar_sample(in,
+                                                   sample,
+                                                   ch,
+                                                   bits_per_sample,
+                                                   in_samples,
+                                                   src_sample_rate,
+                                                   dst_sample_rate);
+            avp_swr_write_planar_sample(out,
+                                        sample,
+                                        ch,
+                                        bits_per_sample,
+                                        value);
         }
     }
 
@@ -809,20 +869,23 @@ avp_status_t avp_swr_planar2interleave(uint8_t channels,
 {
     uint32_t sample;
     uint8_t ch;
-    uint8_t bytes;
 
-    if (!avp_swr_check_sample_params(channels, bits_per_sample) ||
-        !avp_swr_check_planar_input(in, channels) ||
+    if (!avp_swr_check_planar_buffer(in, channels) ||
         out == NULL) {
         return AVP_EINVAL;
     }
 
-    bytes = avp_swr_get_sample_bytes(bits_per_sample);
     for (sample = 0u; sample < samples; sample++) {
         for (ch = 0u; ch < channels; ch++) {
-            memcpy((uint8_t *)out + ((size_t)sample * channels + ch) * bytes,
-                   (const uint8_t *)in[ch] + (size_t)sample * bytes,
-                   bytes);
+            int32_t value;
+
+            value = avp_swr_read_planar_sample(in, sample, ch, bits_per_sample);
+            avp_swr_write_interleaved_sample(out,
+                                             sample,
+                                             ch,
+                                             channels,
+                                             bits_per_sample,
+                                             value);
         }
     }
 
@@ -837,20 +900,26 @@ avp_status_t avp_swr_interleave2planar(uint8_t channels,
 {
     uint32_t sample;
     uint8_t ch;
-    uint8_t bytes;
 
-    if (!avp_swr_check_sample_params(channels, bits_per_sample) ||
-        in == NULL ||
-        !avp_swr_check_planar_output(out, channels)) {
+    if (in == NULL ||
+        !avp_swr_check_planar_buffer((const void *const *)out, channels)) {
         return AVP_EINVAL;
     }
 
-    bytes = avp_swr_get_sample_bytes(bits_per_sample);
     for (sample = 0u; sample < samples; sample++) {
         for (ch = 0u; ch < channels; ch++) {
-            memcpy((uint8_t *)out[ch] + (size_t)sample * bytes,
-                   (const uint8_t *)in + ((size_t)sample * channels + ch) * bytes,
-                   bytes);
+            int32_t value;
+
+            value = avp_swr_read_interleaved_sample(in,
+                                                    sample,
+                                                    ch,
+                                                    channels,
+                                                    bits_per_sample);
+            avp_swr_write_planar_sample(out,
+                                        sample,
+                                        ch,
+                                        bits_per_sample,
+                                        value);
         }
     }
 
@@ -886,15 +955,15 @@ void avp_swr_close(avp_swr_t *ctx)
     }
 
     for (i = 0u; i < AVP_RESAMPLE_TMP_COUNT; i++) {
-        avp_audio_buffer_free(&ctx->tmp[i]);
+        avp_swr_buffer_free(&ctx->tmp[i]);
     }
     avp_free(ctx);
 }
 
-static inline avp_audio_buffer_t *avp_swr_next_tmp(avp_swr_t *ctx,
-                                                   uint8_t *index)
+static inline avp_swr_buffer_t *avp_swr_next_tmp(avp_swr_t *ctx,
+                                                 uint8_t *index)
 {
-    avp_audio_buffer_t *buffer;
+    avp_swr_buffer_t *buffer;
 
     buffer = &ctx->tmp[*index];
     *index = (uint8_t)((*index + 1u) % AVP_RESAMPLE_TMP_COUNT);
@@ -916,8 +985,8 @@ int avp_swr_convert(avp_swr_t *ctx,
     if (ctx == NULL ||
         in_samples == 0u ||
         out_samples == 0u ||
-        !avp_swr_check_input(&ctx->in_fmt, in) ||
-        !avp_swr_check_output(&ctx->out_fmt, out)) {
+        !avp_swr_check_buffer(&ctx->in_fmt, in) ||
+        !avp_swr_check_buffer(&ctx->out_fmt, (const void *const *)out)) {
         if (ctx != NULL && (in == NULL || in_samples == 0u)) {
             return 0;
         }
@@ -935,30 +1004,37 @@ int avp_swr_convert(avp_swr_t *ctx,
     src_samples = in_samples;
 
     if (src_fmt.bits_per_sample != ctx->out_fmt.bits_per_sample) {
-        avp_audio_buffer_t *tmp = avp_swr_next_tmp(ctx, &tmp_index);
+        avp_swr_buffer_t *tmp = avp_swr_next_tmp(ctx, &tmp_index);
         avp_audio_format_t dst_fmt = src_fmt;
+        const void *src_data;
+        void *dst_data;
 
         dst_fmt.bits_per_sample = ctx->out_fmt.bits_per_sample;
-        st = avp_audio_buffer_prepare(tmp, &dst_fmt, src_samples);
+        st = avp_swr_buffer_prepare(tmp, &dst_fmt, src_samples);
         if (st != AVP_OK) {
             return st;
         }
 
         if (src_fmt.sample_layout == AVP_SAMPLE_LAYOUT_INTERLEAVED) {
+            src_data = src_in[0];
+            dst_data = tmp->planes[0];
             st = avp_bits_convert_interleaved(
                 src_fmt.bits_per_sample,
                 dst_fmt.bits_per_sample,
                 src_fmt.channels,
-                src_in[0],
-                tmp->planes[0],
+                src_data,
+                dst_data,
                 src_samples);
         } else {
+            const void *const *src_planes = src_in;
+            void *const *dst_planes = (void *const *)tmp->planes;
+
             st = avp_bits_convert_planar(
                 src_fmt.bits_per_sample,
                 dst_fmt.bits_per_sample,
                 src_fmt.channels,
-                src_in,
-                (void *const *)tmp->planes,
+                src_planes,
+                dst_planes,
                 src_samples);
         }
         if (st != AVP_OK) {
@@ -970,28 +1046,35 @@ int avp_swr_convert(avp_swr_t *ctx,
     }
 
     if (src_fmt.channels != ctx->out_fmt.channels) {
-        avp_audio_buffer_t *tmp = avp_swr_next_tmp(ctx, &tmp_index);
+        avp_swr_buffer_t *tmp = avp_swr_next_tmp(ctx, &tmp_index);
         avp_audio_format_t dst_fmt = src_fmt;
+        const void *src_data;
+        void *dst_data;
 
         dst_fmt.channels = ctx->out_fmt.channels;
-        st = avp_audio_buffer_prepare(tmp, &dst_fmt, src_samples);
+        st = avp_swr_buffer_prepare(tmp, &dst_fmt, src_samples);
         if (st != AVP_OK) {
             return st;
         }
 
         if (src_fmt.sample_layout == AVP_SAMPLE_LAYOUT_INTERLEAVED) {
+            src_data = src_in[0];
+            dst_data = tmp->planes[0];
             st = avp_channel_convert_interleaved(src_fmt.channels,
                                                  dst_fmt.channels,
                                                  src_fmt.bits_per_sample,
-                                                 src_in[0],
-                                                 tmp->planes[0],
+                                                 src_data,
+                                                 dst_data,
                                                  src_samples);
         } else {
+            const void *const *src_planes = src_in;
+            void *const *dst_planes = (void *const *)tmp->planes;
+
             st = avp_channel_convert_planar(src_fmt.channels,
                                             dst_fmt.channels,
                                             src_fmt.bits_per_sample,
-                                            src_in,
-                                            (void *const *)tmp->planes,
+                                            src_planes,
+                                            dst_planes,
                                             src_samples);
         }
         if (st != AVP_OK) {
@@ -1003,36 +1086,43 @@ int avp_swr_convert(avp_swr_t *ctx,
     }
 
     if (src_fmt.sample_rate != ctx->out_fmt.sample_rate) {
-        avp_audio_buffer_t *tmp = avp_swr_next_tmp(ctx, &tmp_index);
+        avp_swr_buffer_t *tmp = avp_swr_next_tmp(ctx, &tmp_index);
         avp_audio_format_t dst_fmt = src_fmt;
         uint32_t next_samples;
+        const void *src_data;
+        void *dst_data;
 
         dst_fmt.sample_rate = ctx->out_fmt.sample_rate;
         next_samples = avp_swr_get_out_samples(src_fmt.sample_rate,
                                                dst_fmt.sample_rate,
                                                src_samples);
-        st = avp_audio_buffer_prepare(tmp, &dst_fmt, next_samples);
+        st = avp_swr_buffer_prepare(tmp, &dst_fmt, next_samples);
         if (st != AVP_OK) {
             return st;
         }
 
         if (src_fmt.sample_layout == AVP_SAMPLE_LAYOUT_INTERLEAVED) {
+            src_data = src_in[0];
+            dst_data = tmp->planes[0];
             st = avp_sample_rate_convert_interleaved(src_fmt.sample_rate,
                                                      dst_fmt.sample_rate,
                                                      src_fmt.channels,
                                                      src_fmt.bits_per_sample,
-                                                     src_in[0],
+                                                     src_data,
                                                      src_samples,
-                                                     tmp->planes[0],
+                                                     dst_data,
                                                      &next_samples);
         } else {
+            const void *const *src_planes = src_in;
+            void *const *dst_planes = (void *const *)tmp->planes;
+
             st = avp_sample_rate_convert_planar(src_fmt.sample_rate,
                                                 dst_fmt.sample_rate,
                                                 src_fmt.channels,
                                                 src_fmt.bits_per_sample,
-                                                src_in,
+                                                src_planes,
                                                 src_samples,
-                                                (void *const *)tmp->planes,
+                                                dst_planes,
                                                 &next_samples);
         }
         if (st != AVP_OK) {
@@ -1045,26 +1135,32 @@ int avp_swr_convert(avp_swr_t *ctx,
     }
 
     if (src_fmt.sample_layout != ctx->out_fmt.sample_layout) {
-        avp_audio_buffer_t *tmp = avp_swr_next_tmp(ctx, &tmp_index);
+        avp_swr_buffer_t *tmp = avp_swr_next_tmp(ctx, &tmp_index);
         avp_audio_format_t dst_fmt = src_fmt;
 
         dst_fmt.sample_layout = ctx->out_fmt.sample_layout;
-        st = avp_audio_buffer_prepare(tmp, &dst_fmt, src_samples);
+        st = avp_swr_buffer_prepare(tmp, &dst_fmt, src_samples);
         if (st != AVP_OK) {
             return st;
         }
 
         if (src_fmt.sample_layout == AVP_SAMPLE_LAYOUT_INTERLEAVED) {
+            const void *src_data = src_in[0];
+            void *const *dst_planes = (void *const *)tmp->planes;
+
             st = avp_swr_interleave2planar(src_fmt.channels,
                                            src_fmt.bits_per_sample,
-                                           src_in[0],
-                                           (void *const *)tmp->planes,
+                                           src_data,
+                                           dst_planes,
                                            src_samples);
         } else {
+            const void *const *src_planes = src_in;
+            void *dst_data = tmp->planes[0];
+
             st = avp_swr_planar2interleave(src_fmt.channels,
                                            src_fmt.bits_per_sample,
-                                           src_in,
-                                           tmp->planes[0],
+                                           src_planes,
+                                           dst_data,
                                            src_samples);
         }
         if (st != AVP_OK) {

@@ -225,40 +225,80 @@ CherryAVP 是一个小而美，低内存，高性能的专为 MCU 设计的 Audi
 
 - 语音活动检测 (VAD)：基于 WebRTC VAD，支持 normal / low bitrate / aggressive / very aggressive 四档模式
 - 32 kHz 分频处理：32 kHz 输入会拆成两个 16 kHz 频带，低频带用于 AEC / NS / AGC / VAD，处理完成后合成为全带输出
-- 运行时控制：支持开关 AEC / NS / AGC / VAD / HPF，并支持动态调整 AEC、NS、AGC、VAD 相关配置
+- 支持运行时控制：支持开关 AEC / NS / AGC / VAD / HPF，并支持动态调整 AEC、NS、AGC、VAD 相关配置
 
 ### 自动电平控制 (ALC)
 ### 动态范围控制 (DRC)
 ### 啸叫抑制 (Howling)
 
+自适应啸叫抑制器按短帧分析强窄带峰值，并使用最多 4 个 IIR 陷波器跟踪和抑制啸叫频点。
+
+- 输入 / 输出：16-bit signed 交错 PCM，支持单声道和双声道
+- 可运行时控制：启用、检测阈值、陷波器 Q 值、最大陷波器数量、复位
+
 ## 音频效果算法
 
+### 滤波器 (Filter)
+
+支持低通、高通、带通、带阻 / 陷波、全通、峰值、低频搁架和高频搁架滤波器。
+
 ### 均衡器 (EQ)
+
+参数均衡器基于 RBJ 双二阶滤波器级联实现，支持 peaking、低频/高频搁架、低通和高通频段。
+
+- 最多支持 8 个频段和 8 个交错声道
+- 每个频段可配置类型、频率、dB 增益和 Q 值/斜率
+- 支持运行时替换频段参数以及启用/旁路
+
 ### 混响 (Reverb)
+
+流式混响使用 4 路并行反馈延时线，支持调节 room size、damping、wet 和 dry 混合比例。
+
+- 输入 / 输出：16-bit signed interleaved PCM，支持单声道和双声道
+- 支持运行时控制
+
 ### 压缩器 (Compressor)
+
+压缩器使用峰值包络跟踪，支持 threshold、ratio、attack、release 和 makeup gain。
+
+- 输入 / 输出：16-bit signed interleaved PCM，最多 8 个声道
+- 支持运行时控制
+
 ### 限制器 (Limiter)
+
+峰值限制器将输出限制在可配置 ceiling 内，并使用 attack/release 平滑降低削波和瞬态峰值。
+
+- 输入 / 输出：16-bit signed interleaved PCM，最多 8 个声道
+- 支持运行时控制
+
 ### 混音 (Mixer)
+
+PCM 混音器最多组合 4 路同步 interleaved PCM，每路使用独立线性增益，输出进行 `int16_t` 饱和裁剪。
+
+- 所有输入必须使用相同采样率、声道数，并且每次处理的采样数一致
+- 支持单声道到 8 声道 interleaved PCM
+- 支持运行时控制
 
 ### 变速/变调 (Sonic)
 
 基于 **Sonic** 算法实现，用于语音/音乐的流式变速和变调处理。
 
-- 输入 / 输出：16-bit signed interleaved PCM
-- 声道数：`1 / 2`
-- 采样率：由 `avp_ae_sonic_config_t.sample_rate` 指定，输入和输出保持同一采样率
-- 支持能力：独立设置 speed、pitch、rate、volume、chord pitch mode、quality
-- 运行时控制：支持 set/get speed、pitch、rate、volume、chord pitch、quality、sample rate、channels，支持 flush、reset 和查询内部可读输出采样数
+- 输入 / 输出：16-bit signed interleaved PCM，支持单声道和双声道
+- 支持 speed、pitch、rate、volume、chord pitch mode、quality 设置
+- 支持运行时控制
 
 ### 音量控制 (Volume Control)
 
-音量控制基于 256 档 dB 映射表实现，用于 16-bit PCM 的静音、衰减和放大。
+音量控制基于 256 档 dB 映射表实现，用于 16-bit interleaved PCM 的静音、衰减和放大。
 
-- 输入 / 输出：16-bit signed PCM，支持原地处理
-- 声道数：不限制，`sample_count` 为总 `int16_t` 采样点数，包含所有交织声道
+- 输入 / 输出：16-bit signed interleaved PCM
 - 控制档位：`index` 范围为 `0..255`，其中 `0` 固定为静音
 - dB 映射：`index 1..255` 按 `min_db..max_db` 生成 Q14 线性增益表，默认范围为 `-60..18 dB`
-- 饱和保护：当增益大于 1.0 时，输出会对 `int16_t` 范围进行饱和裁剪，避免整数溢出
-- 运行时控制：支持 set/get index、set/get dB range、enable/bypass、查询当前 Q14 gain
+- 支持运行时控制
+
+```bash
+FRAME_COUNT=1 ./scripts/test_examples.sh
+```
 
 ## 如何使用
 
@@ -288,5 +328,3 @@ CherryAVP 是一个小而美，低内存，高性能的专为 MCU 设计的 Audi
 | webrtc | AEC2/NS/AGC/VAD | https://webrtc.googlesource.com/src/webrtc/+/e00dfb9675737cba8fc74efde80c11043cb57089 |
 | xiph-speexdsp | AEC/NS/AGC/VAD | https://github.com/xiph/speexdsp/tree/1b28a0f61bc31162979e1f26f3981fc3637095c8 |
 | athena-signal | AEC/NS/AGC/VAD/DOA/MVDR/GSC | https://github.com/athena-team/athena-signal/tree/master/athena_signal/kernels |
-
-
