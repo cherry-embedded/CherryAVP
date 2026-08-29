@@ -12,6 +12,8 @@
 extern "C" {
 #endif
 
+typedef void *avp_sw_sample_t;
+
 typedef enum {
     AVP_SAMPLE_LAYOUT_INTERLEAVED = 0,
     AVP_SAMPLE_LAYOUT_PLANAR,
@@ -23,8 +25,6 @@ typedef struct {
     uint8_t channels;
     avp_sample_layout_t sample_layout;
 } avp_audio_format_t;
-
-typedef struct avp_swr_context avp_swr_t;
 
 static inline uint32_t avp_swr_get_out_samples(uint32_t in_rate,
                                                uint32_t out_rate,
@@ -49,6 +49,8 @@ static inline uint8_t avp_swr_get_sample_bytes(uint16_t bits_per_sample)
             return 1u;
         case 16u:
             return 2u;
+        case 24u:
+            return 3u;
         case 32u:
             return 4u;
         default:
@@ -69,8 +71,8 @@ static inline uint8_t avp_swr_get_sample_bytes(uint16_t bits_per_sample)
 avp_status_t avp_bits_convert_interleaved(uint16_t src_bits_per_sample,
                                           uint16_t dst_bits_per_sample,
                                           uint8_t channels,
-                                          const void *in,
-                                          void *out,
+                                          avp_sw_sample_t in,
+                                          avp_sw_sample_t out,
                                           uint32_t samples);
 /**
  * \brief Convert one input buffer to the requested output format.
@@ -85,8 +87,8 @@ avp_status_t avp_bits_convert_interleaved(uint16_t src_bits_per_sample,
 avp_status_t avp_bits_convert_planar(uint16_t src_bits_per_sample,
                                      uint16_t dst_bits_per_sample,
                                      uint8_t channels,
-                                     const void *const in[],
-                                     void *const out[],
+                                     avp_sw_sample_t in[],
+                                     avp_sw_sample_t out[],
                                      uint32_t samples);
 
 /**
@@ -102,8 +104,8 @@ avp_status_t avp_bits_convert_planar(uint16_t src_bits_per_sample,
 avp_status_t avp_channel_convert_interleaved(uint8_t src_channels,
                                              uint8_t dst_channels,
                                              uint16_t bits_per_sample,
-                                             const void *in,
-                                             void *out,
+                                             avp_sw_sample_t in,
+                                             avp_sw_sample_t out,
                                              uint32_t samples);
 /**
  * \brief Convert one input buffer to the requested output format.
@@ -118,8 +120,8 @@ avp_status_t avp_channel_convert_interleaved(uint8_t src_channels,
 avp_status_t avp_channel_convert_planar(uint8_t src_channels,
                                         uint8_t dst_channels,
                                         uint16_t bits_per_sample,
-                                        const void *const in[],
-                                        void *const out[],
+                                        avp_sw_sample_t in[],
+                                        avp_sw_sample_t out[],
                                         uint32_t samples);
 
 /**
@@ -138,9 +140,9 @@ avp_status_t avp_sample_rate_convert_interleaved(uint32_t src_sample_rate,
                                                  uint32_t dst_sample_rate,
                                                  uint8_t channels,
                                                  uint16_t bits_per_sample,
-                                                 const void *in,
+                                                 avp_sw_sample_t in,
                                                  uint32_t in_samples,
-                                                 void *out,
+                                                 avp_sw_sample_t out,
                                                  uint32_t *out_samples);
 /**
  * \brief Convert one input buffer to the requested output format.
@@ -158,9 +160,9 @@ avp_status_t avp_sample_rate_convert_planar(uint32_t src_sample_rate,
                                             uint32_t dst_sample_rate,
                                             uint8_t channels,
                                             uint16_t bits_per_sample,
-                                            const void *const in[],
+                                            avp_sw_sample_t in[],
                                             uint32_t in_samples,
-                                            void *const out[],
+                                            avp_sw_sample_t out[],
                                             uint32_t *out_samples);
 
 /**
@@ -174,8 +176,8 @@ avp_status_t avp_sample_rate_convert_planar(uint32_t src_sample_rate,
  */
 avp_status_t avp_swr_planar2interleave(uint8_t channels,
                                        uint16_t bits_per_sample,
-                                       const void *const in[],
-                                       void *out,
+                                       avp_sw_sample_t in[],
+                                       avp_sw_sample_t out,
                                        uint32_t samples);
 /**
  * \brief Perform this API operation.
@@ -188,37 +190,9 @@ avp_status_t avp_swr_planar2interleave(uint8_t channels,
  */
 avp_status_t avp_swr_interleave2planar(uint8_t channels,
                                        uint16_t bits_per_sample,
-                                       const void *in,
-                                       void *const out[],
+                                       avp_sw_sample_t in,
+                                       avp_sw_sample_t out[],
                                        uint32_t samples);
-
-/**
- * \brief Open and initialize the context.
- * \param in_fmt Parameter in_fmt.
- * \param out_fmt Parameter out_fmt.
- * \return Resampler context pointer, or NULL on failure.
- */
-avp_swr_t *avp_swr_open(const avp_audio_format_t *in_fmt,
-                        const avp_audio_format_t *out_fmt);
-/**
- * \brief Close the context and release resources.
- * \param ctx Parameter ctx.
- */
-void avp_swr_close(avp_swr_t *ctx);
-/**
- * \brief Convert one input buffer to the requested output format.
- * \param ctx Parameter ctx.
- * \param in Parameter in.
- * \param in_samples Parameter in_samples.
- * \param out Parameter out.
- * \param out_samples Parameter out_samples.
- * \return Number of samples written, or a negative error code.
- */
-int avp_swr_convert(avp_swr_t *ctx,
-                    const void *const in[],
-                    uint32_t in_samples,
-                    void *const out[],
-                    uint32_t out_samples);
 
 #ifdef __cplusplus
 }

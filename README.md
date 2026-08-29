@@ -229,7 +229,7 @@ Implemented features:
 
 - Voice activity detection (VAD): based on WebRTC VAD, with normal / low bitrate / aggressive / very aggressive modes
 - 32 kHz band splitting: 32 kHz input is split into two 16 kHz bands; the low band is used by AEC / NS / AGC / VAD and then merged back to full-band output
-- Runtime control: AEC / NS / AGC / VAD / HPF can be enabled or disabled, and AEC, NS, AGC, and VAD parameters can be updated at runtime
+- Support Runtime control: AEC / NS / AGC / VAD / HPF can be enabled or disabled, and AEC, NS, AGC, and VAD parameters can be updated at runtime
 
 ### Automatic level control (ALC)
 ### Dynamic range control (DRC)
@@ -237,33 +237,24 @@ Implemented features:
 
 ## Audio Effects Algorithms
 
+### Filter
+
+Supports low-pass, high-pass, band-pass, band-stop / notch, all-pass, peaking,
+low-shelf, and high-shelf filters.
+
+### Compressor (Compressor)
+
 ### Equalizer (EQ)
-### Reverb
-### Compressor
-### Limiter
-### Mixer
+
+### Limiter (Limiter)
+
+### Mixer (Mixer)
+
+### Reverb (Reverb)
 
 ### Time and pitch modification (Sonic)
 
-The Sonic-based time and pitch effect is based on **sonic** . It provides streaming speed and pitch modification for speech or music.
-
-- Input / output: 16-bit signed interleaved PCM
-- Channels: `1 / 2`
-- Sample rate: configured by `avp_ae_sonic_config_t.sample_rate`; input and output keep the same sample rate
-- Features: independently controls speed, pitch, rate, volume, chord pitch mode, and quality
-- Runtime control: set/get speed, pitch, rate, volume, chord pitch, quality, sample rate, and channels; flush, reset, and query available output samples
-
-### Volume control
-
-The volume effect uses a 256-step dB mapping table for mute, attenuation, and amplification of 16-bit
-PCM samples.
-
-- Input / output: 16-bit signed PCM, with in-place processing supported
-- Channels: unrestricted; `sample_count` is the total number of `int16_t` samples, including all interleaved channels
-- Volume index: `0..255`; index `0` is always mute
-- dB mapping: indices `1..255` are converted from `min_db..max_db` to Q14 linear gain factors; the default range is `-60..18 dB`
-- Saturation: when gain is greater than 1.0, output samples are saturated to the `int16_t` range to avoid integer overflow
-- Runtime control: set/get index, set/get dB range, enable/bypass, and query the current Q14 gain
+### Volume control (Volume Control)
 
 ## How to use
 

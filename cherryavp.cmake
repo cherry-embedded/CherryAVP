@@ -81,6 +81,75 @@ list(APPEND CHERRYAVP_TARGET_PUBLIC_DEFINITION CONFIG_CHERRYAVP_AE_VOL)
 endif()
 
 # ---------------------------------------------------------------------------
+# Adaptive howling suppression filter
+# ---------------------------------------------------------------------------
+
+if(CONFIG_CHERRYAVP_AFE_HOWLING)
+list(APPEND CHERRYAVP_TARGET_SRC
+    ${CHERRYAVP_AVFILTER_SRC_DIR}/avp_afe_howling.c
+)
+list(APPEND CHERRYAVP_TARGET_PUBLIC_DEFINITION CONFIG_CHERRYAVP_AFE_HOWLING)
+endif()
+
+# ---------------------------------------------------------------------------
+# Parametric equalizer
+# ---------------------------------------------------------------------------
+
+if(CONFIG_CHERRYAVP_AE_EQ)
+list(APPEND CHERRYAVP_TARGET_SRC
+    ${CHERRYAVP_AVFILTER_SRC_DIR}/avp_ae_eq.c
+)
+list(APPEND CHERRYAVP_TARGET_PUBLIC_DEFINITION CONFIG_CHERRYAVP_AE_EQ)
+endif()
+
+# ---------------------------------------------------------------------------
+# Generic biquad filter
+# ---------------------------------------------------------------------------
+
+if(CONFIG_CHERRYAVP_AE_FILTER)
+list(APPEND CHERRYAVP_TARGET_SRC
+    ${CHERRYAVP_AVFILTER_SRC_DIR}/avp_ae_filter.c
+)
+list(APPEND CHERRYAVP_TARGET_PUBLIC_DEFINITION CONFIG_CHERRYAVP_AE_FILTER)
+endif()
+
+# ---------------------------------------------------------------------------
+# PCM mixer
+# ---------------------------------------------------------------------------
+
+if(CONFIG_CHERRYAVP_AE_MIXER)
+list(APPEND CHERRYAVP_TARGET_SRC
+    ${CHERRYAVP_AVFILTER_SRC_DIR}/avp_ae_mixer.c
+)
+list(APPEND CHERRYAVP_TARGET_PUBLIC_DEFINITION CONFIG_CHERRYAVP_AE_MIXER)
+endif()
+
+# ---------------------------------------------------------------------------
+# Reverb, compressor, and limiter
+# ---------------------------------------------------------------------------
+
+if(CONFIG_CHERRYAVP_AE_REVERB)
+list(APPEND CHERRYAVP_TARGET_SRC
+    ${CHERRYAVP_AVFILTER_SRC_DIR}/avp_ae_reverb.c
+)
+list(APPEND CHERRYAVP_TARGET_PUBLIC_DEFINITION CONFIG_CHERRYAVP_AE_REVERB)
+endif()
+
+if(CONFIG_CHERRYAVP_AE_COMPRESSOR)
+list(APPEND CHERRYAVP_TARGET_SRC
+    ${CHERRYAVP_AVFILTER_SRC_DIR}/avp_ae_compressor.c
+)
+list(APPEND CHERRYAVP_TARGET_PUBLIC_DEFINITION CONFIG_CHERRYAVP_AE_COMPRESSOR)
+endif()
+
+if(CONFIG_CHERRYAVP_AE_LIMITER)
+list(APPEND CHERRYAVP_TARGET_SRC
+    ${CHERRYAVP_AVFILTER_SRC_DIR}/avp_ae_limiter.c
+)
+list(APPEND CHERRYAVP_TARGET_PUBLIC_DEFINITION CONFIG_CHERRYAVP_AE_LIMITER)
+endif()
+
+# ---------------------------------------------------------------------------
 # Sonic time/pitch audio filter
 # ---------------------------------------------------------------------------
 
@@ -741,9 +810,6 @@ list(APPEND CHERRYAVP_TARGET_PUBLIC_INCLUDE
     ${LIBOGG_DIR}/include
 )
 list(APPEND CHERRYAVP_TARGET_PUBLIC_DEFINITION CONFIG_CHERRYAVP_VORBIS)
-list(APPEND CHERRYAVP_TARGET_PRIVATE_DEFINITION
-HAVE_ALLOCA_H
-)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -809,16 +875,14 @@ list(APPEND CHERRYAVP_TARGET_PRIVATE_INCLUDE
 list(APPEND CHERRYAVP_TARGET_PUBLIC_INCLUDE
     ${LIBFLAC_DIR}/include
 )
+list(APPEND CHERRYAVP_TARGET_PUBLIC_DEFINITION CONFIG_CHERRYAVP_FLAC)
 list(APPEND CHERRYAVP_TARGET_PRIVATE_DEFINITION
     FLAC__NO_DLL
     FLAC__NO_ASM
     FLAC__HAS_OGG=0
     FLAC__HAS_FILE=0
     FLAC__INTEGER_ONLY_LIBRARY
-    HAVE_INTTYPES_H
-    HAVE_STDINT_H
 )
-list(APPEND CHERRYAVP_TARGET_PUBLIC_DEFINITION CONFIG_CHERRYAVP_FLAC)
 endif()
 
 if(CONFIG_CHERRYAVP_ALAC)

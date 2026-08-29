@@ -14,50 +14,30 @@ extern "C" {
 
 typedef struct avp_ae_sonic avp_ae_sonic_t;
 
-/** @brief Maximum number of channels supported by the Sonic processor. */
-#define AVP_AE_SONIC_MAX_CHANNELS 2u
-
 /** @brief Sonic runtime control commands. */
 typedef enum {
-    AVP_AE_SONIC_CMD_SET_SPEED = 0,   /**< Set playback speed multiplier (float*). */
-    AVP_AE_SONIC_CMD_GET_SPEED,       /**< Get playback speed multiplier (float*). */
-    AVP_AE_SONIC_CMD_SET_PITCH,       /**< Set pitch multiplier (float*). */
-    AVP_AE_SONIC_CMD_GET_PITCH,       /**< Get pitch multiplier (float*). */
-    AVP_AE_SONIC_CMD_SET_RATE,        /**< Set sample-rate multiplier (float*). */
-    AVP_AE_SONIC_CMD_GET_RATE,        /**< Get sample-rate multiplier (float*). */
-    AVP_AE_SONIC_CMD_SET_VOLUME,      /**< Set output volume scale (float*). */
-    AVP_AE_SONIC_CMD_GET_VOLUME,      /**< Get output volume scale (float*). */
-    AVP_AE_SONIC_CMD_SET_CHORD_PITCH, /**< Enable chord pitch mode (int*). */
-    AVP_AE_SONIC_CMD_GET_CHORD_PITCH, /**< Get chord pitch mode flag (int*). */
-    AVP_AE_SONIC_CMD_SET_QUALITY,     /**< Set processing quality (int*; 0=normal, 1=high). */
-    AVP_AE_SONIC_CMD_GET_QUALITY,     /**< Get processing quality (int*). */
-    AVP_AE_SONIC_CMD_SET_SAMPLE_RATE, /**< Change sample rate at runtime (uint32_t*). */
-    AVP_AE_SONIC_CMD_GET_SAMPLE_RATE, /**< Get current sample rate (uint32_t*). */
-    AVP_AE_SONIC_CMD_SET_CHANNELS,    /**< Change channel count at runtime (uint8_t*). */
-    AVP_AE_SONIC_CMD_GET_CHANNELS,    /**< Get current channel count (uint8_t*). */
-    AVP_AE_SONIC_CMD_FLUSH,           /**< Flush internal buffers to drain tail samples. */
-    AVP_AE_SONIC_CMD_GET_AVAILABLE,   /**< Get samples per channel available for output (uint32_t*). */
-    AVP_AE_SONIC_CMD_RESET,           /**< Reset the processor to its initial state. */
+    AVP_AE_SONIC_CMD_SET_SPEED = 0, /**< Set playback speed multiplier (float*). */
+    AVP_AE_SONIC_CMD_GET_SPEED,     /**< Get playback speed multiplier (float*). */
+    AVP_AE_SONIC_CMD_SET_PITCH,     /**< Set pitch multiplier (float*). */
+    AVP_AE_SONIC_CMD_GET_PITCH,     /**< Get pitch multiplier (float*). */
+    AVP_AE_SONIC_CMD_FLUSH,         /**< Flush internal buffers to drain tail samples. */
+    AVP_AE_SONIC_CMD_GET_AVAILABLE, /**< Get samples per channel available for output (uint32_t*). */
 } avp_ae_sonic_cmd_t;
 
 /** @brief Sonic instance configuration. */
 typedef struct {
-    uint32_t sample_rate;    /**< Input sample rate in Hz; must be non-zero. */
-    uint8_t channels;        /**< Number of interleaved channels; mono or stereo. */
-    float speed;             /**< Playback speed multiplier; 0 defaults to 1.0. */
-    float pitch;             /**< Pitch multiplier; 0 defaults to 1.0. */
-    float rate;              /**< Sample-rate multiplier; 0 defaults to 1.0. */
-    float volume;            /**< Output volume scale; 0 defaults to 1.0. */
-    uint8_t use_chord_pitch; /**< Non-zero to enable chord pitch mode. */
-    uint8_t quality;         /**< Processing quality: 0 = normal, 1 = high. */
+    uint32_t sample_rate; /**< Input sample rate in Hz; must be non-zero. */
+    uint8_t channels;     /**< Number of interleaved channels. */
+    float speed;          /**< Playback speed multiplier; 0 defaults to 1.0. */
+    float pitch;          /**< Pitch multiplier; 0 defaults to 1.0. */
 } avp_ae_sonic_config_t;
 
 /**
  * @brief Create a Sonic time/pitch processor instance.
  *
- * @p sample_rate must be non-zero. @p channels currently supports mono and
- * stereo. @p speed, @p pitch, @p rate and @p volume default to 1.0 when set
- * to 0 in the configuration.
+ * @p sample_rate must be non-zero. @p channels supports 1 through
+ * AVP_AE_SONIC_MAX_CHANNELS. @p speed, @p pitch and @p rate default to 1.0
+ * when set to 0 in the configuration.
  *
  * @param[in]  config  Pointer to the Sonic configuration structure.
  * @param[out] handle  Receives the newly created Sonic instance pointer.

@@ -33,8 +33,6 @@ ffmpeg -hide_banner -y \
 `near.pcm` 是麦克风输入（jinitaimei 人声 + 440Hz 回声 + 粉红噪声），
 `far.pcm` 是扬声器参考信号，输出为 16-bit 单声道 PCM。
 
-下面的命令默认输出到当前目录。需要覆盖已有文件时，在命令中增加 `-y`。
-
 ## PCM WAV
 
 16-bit little-endian PCM：

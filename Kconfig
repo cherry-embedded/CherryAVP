@@ -104,6 +104,34 @@ config CHERRYAVP_AFE_3A_NS_FIXED
     depends on CHERRYAVP_AFE_3A
     default n
 
+config CHERRYAVP_AFE_HOWLING
+    bool "Enable AFE howling module"
+    default y
+
+config CHERRYAVP_AE_FILTER
+    bool "Enable AE Filter module"
+    default y
+
+config CHERRYAVP_AE_COMPRESSOR
+    bool "Enable AE compressor module"
+    default y
+
+config CHERRYAVP_AE_EQ
+    bool "Enable AE eq module"
+    default y
+
+config CHERRYAVP_AE_LIMITER
+    bool "Enable AE limiter module"
+    default y
+
+config CHERRYAVP_AE_MIXER
+    bool "Enable AE mixer module"
+    default y
+
+config CHERRYAVP_AE_REVERB
+    bool "Enable AE reverb module"
+    default y
+
 config CHERRYAVP_AE_SONIC
     bool "Enable AE Sonic module"
     default y

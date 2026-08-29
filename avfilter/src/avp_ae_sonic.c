@@ -11,98 +11,14 @@ struct avp_ae_sonic {
     sonicStream stream;
 };
 
-static int avp_ae_sonic_valid_channels(uint8_t channels)
-{
-    return channels >= 1u && channels <= AVP_AE_SONIC_MAX_CHANNELS;
-}
-
-static int avp_ae_sonic_valid_bool(uint8_t value)
-{
-    return value == 0u || value == 1u;
-}
-
-static int avp_ae_sonic_valid_positive(float value)
-{
-    return value > 0.0f;
-}
-
-static void avp_ae_sonic_set_default_params(avp_ae_sonic_config_t *config)
-{
-    if (config->speed == 0.0f) {
-        config->speed = 1.0f;
-    }
-    if (config->pitch == 0.0f) {
-        config->pitch = 1.0f;
-    }
-    if (config->rate == 0.0f) {
-        config->rate = 1.0f;
-    }
-    if (config->volume == 0.0f) {
-        config->volume = 1.0f;
-    }
-}
-
-static avp_status_t avp_ae_sonic_validate_config(const avp_ae_sonic_config_t *config)
-{
-    if (config == NULL || config->sample_rate == 0u ||
-        !avp_ae_sonic_valid_channels(config->channels) ||
-        !avp_ae_sonic_valid_positive(config->speed) ||
-        !avp_ae_sonic_valid_positive(config->pitch) ||
-        !avp_ae_sonic_valid_positive(config->rate) ||
-        !avp_ae_sonic_valid_positive(config->volume) ||
-        !avp_ae_sonic_valid_bool(config->use_chord_pitch) ||
-        !avp_ae_sonic_valid_bool(config->quality)) {
-        return AVP_EINVAL;
-    }
-
-    return AVP_OK;
-}
-
-static void avp_ae_sonic_apply_config(avp_ae_sonic_t *ctx)
-{
-    sonicSetSpeed(ctx->stream, ctx->config.speed);
-    sonicSetPitch(ctx->stream, ctx->config.pitch);
-    sonicSetRate(ctx->stream, ctx->config.rate);
-    sonicSetVolume(ctx->stream, ctx->config.volume);
-    sonicSetChordPitch(ctx->stream, ctx->config.use_chord_pitch);
-    sonicSetQuality(ctx->stream, ctx->config.quality);
-}
-
-static avp_status_t avp_ae_sonic_recreate_stream(avp_ae_sonic_t *ctx)
-{
-    sonicStream stream;
-
-    stream = sonicCreateStream((int)ctx->config.sample_rate,
-                               (int)ctx->config.channels);
-    if (stream == NULL) {
-        return AVP_ENOMEM;
-    }
-
-    if (ctx->stream != NULL) {
-        sonicDestroyStream(ctx->stream);
-    }
-
-    ctx->stream = stream;
-    avp_ae_sonic_apply_config(ctx);
-    return AVP_OK;
-}
-
 avp_status_t avp_ae_sonic_open(const avp_ae_sonic_config_t *config,
                                avp_ae_sonic_t **handle)
 {
     avp_ae_sonic_t *ctx;
-    avp_ae_sonic_config_t local_config;
-    avp_status_t ret;
+    sonicStream stream;
 
     if (config == NULL || handle == NULL) {
         return AVP_EINVAL;
-    }
-
-    local_config = *config;
-    avp_ae_sonic_set_default_params(&local_config);
-    ret = avp_ae_sonic_validate_config(&local_config);
-    if (ret != AVP_OK) {
-        return ret;
     }
 
     ctx = (avp_ae_sonic_t *)avp_calloc(1, sizeof(avp_ae_sonic_t));
@@ -110,12 +26,17 @@ avp_status_t avp_ae_sonic_open(const avp_ae_sonic_config_t *config,
         return AVP_ENOMEM;
     }
 
-    ctx->config = local_config;
-    ret = avp_ae_sonic_recreate_stream(ctx);
-    if (ret != AVP_OK) {
+    ctx->config = *config;
+    stream = sonicCreateStream((int)ctx->config.sample_rate,
+                               (int)ctx->config.channels);
+    if (stream == NULL) {
         avp_free(ctx);
-        return ret;
+        return AVP_ENOMEM;
     }
+    ctx->stream = stream;
+
+    sonicSetSpeed(ctx->stream, ctx->config.speed);
+    sonicSetPitch(ctx->stream, ctx->config.pitch);
 
     *handle = ctx;
     return AVP_OK;
@@ -138,9 +59,6 @@ avp_status_t avp_ae_sonic_control(avp_ae_sonic_t *handle,
                                   void *arg)
 {
     float value_f;
-    uint32_t value_u32;
-    uint8_t value_u8;
-    int value_i;
 
     if (handle == NULL) {
         return AVP_EINVAL;
@@ -148,7 +66,7 @@ avp_status_t avp_ae_sonic_control(avp_ae_sonic_t *handle,
 
     switch (cmd) {
         case AVP_AE_SONIC_CMD_SET_SPEED:
-            if (arg == NULL || !avp_ae_sonic_valid_positive(*(float *)arg)) {
+            if (arg == NULL) {
                 return AVP_EINVAL;
             }
             value_f = *(float *)arg;
@@ -164,7 +82,7 @@ avp_status_t avp_ae_sonic_control(avp_ae_sonic_t *handle,
             return AVP_OK;
 
         case AVP_AE_SONIC_CMD_SET_PITCH:
-            if (arg == NULL || !avp_ae_sonic_valid_positive(*(float *)arg)) {
+            if (arg == NULL) {
                 return AVP_EINVAL;
             }
             value_f = *(float *)arg;
@@ -179,125 +97,6 @@ avp_status_t avp_ae_sonic_control(avp_ae_sonic_t *handle,
             *(float *)arg = sonicGetPitch(handle->stream);
             return AVP_OK;
 
-        case AVP_AE_SONIC_CMD_SET_RATE:
-            if (arg == NULL || !avp_ae_sonic_valid_positive(*(float *)arg)) {
-                return AVP_EINVAL;
-            }
-            value_f = *(float *)arg;
-            sonicSetRate(handle->stream, value_f);
-            handle->config.rate = value_f;
-            return AVP_OK;
-
-        case AVP_AE_SONIC_CMD_GET_RATE:
-            if (arg == NULL) {
-                return AVP_EINVAL;
-            }
-            *(float *)arg = sonicGetRate(handle->stream);
-            return AVP_OK;
-
-        case AVP_AE_SONIC_CMD_SET_VOLUME:
-            if (arg == NULL || !avp_ae_sonic_valid_positive(*(float *)arg)) {
-                return AVP_EINVAL;
-            }
-            value_f = *(float *)arg;
-            sonicSetVolume(handle->stream, value_f);
-            handle->config.volume = value_f;
-            return AVP_OK;
-
-        case AVP_AE_SONIC_CMD_GET_VOLUME:
-            if (arg == NULL) {
-                return AVP_EINVAL;
-            }
-            *(float *)arg = sonicGetVolume(handle->stream);
-            return AVP_OK;
-
-        case AVP_AE_SONIC_CMD_SET_CHORD_PITCH:
-            if (arg == NULL) {
-                return AVP_EINVAL;
-            }
-            value_i = *(int *)arg;
-            if (value_i != 0 && value_i != 1) {
-                return AVP_EINVAL;
-            }
-            sonicSetChordPitch(handle->stream, value_i);
-            handle->config.use_chord_pitch = (uint8_t)value_i;
-            return AVP_OK;
-
-        case AVP_AE_SONIC_CMD_GET_CHORD_PITCH:
-            if (arg == NULL) {
-                return AVP_EINVAL;
-            }
-            *(int *)arg = sonicGetChordPitch(handle->stream);
-            return AVP_OK;
-
-        case AVP_AE_SONIC_CMD_SET_QUALITY:
-            if (arg == NULL) {
-                return AVP_EINVAL;
-            }
-            value_i = *(int *)arg;
-            if (value_i != 0 && value_i != 1) {
-                return AVP_EINVAL;
-            }
-            sonicSetQuality(handle->stream, value_i);
-            handle->config.quality = (uint8_t)value_i;
-            return AVP_OK;
-
-        case AVP_AE_SONIC_CMD_GET_QUALITY:
-            if (arg == NULL) {
-                return AVP_EINVAL;
-            }
-            *(int *)arg = sonicGetQuality(handle->stream);
-            return AVP_OK;
-
-        case AVP_AE_SONIC_CMD_SET_SAMPLE_RATE:
-            if (arg == NULL || *(uint32_t *)arg == 0u ||
-                *(uint32_t *)arg > (uint32_t)INT32_MAX) {
-                return AVP_EINVAL;
-            }
-            value_u32 = *(uint32_t *)arg;
-            {
-                avp_ae_sonic_config_t old_config = handle->config;
-                avp_status_t ret;
-
-                handle->config.sample_rate = value_u32;
-                ret = avp_ae_sonic_recreate_stream(handle);
-                if (ret != AVP_OK) {
-                    handle->config = old_config;
-                }
-                return ret;
-            }
-
-        case AVP_AE_SONIC_CMD_GET_SAMPLE_RATE:
-            if (arg == NULL) {
-                return AVP_EINVAL;
-            }
-            *(uint32_t *)arg = (uint32_t)sonicGetSampleRate(handle->stream);
-            return AVP_OK;
-
-        case AVP_AE_SONIC_CMD_SET_CHANNELS:
-            if (arg == NULL || !avp_ae_sonic_valid_channels(*(uint8_t *)arg)) {
-                return AVP_EINVAL;
-            }
-            value_u8 = *(uint8_t *)arg;
-            {
-                avp_ae_sonic_config_t old_config = handle->config;
-                avp_status_t ret;
-
-                handle->config.channels = value_u8;
-                ret = avp_ae_sonic_recreate_stream(handle);
-                if (ret != AVP_OK) {
-                    handle->config = old_config;
-                }
-                return ret;
-            }
-
-        case AVP_AE_SONIC_CMD_GET_CHANNELS:
-            if (arg == NULL) {
-                return AVP_EINVAL;
-            }
-            *(uint8_t *)arg = (uint8_t)sonicGetNumChannels(handle->stream);
-            return AVP_OK;
-
         case AVP_AE_SONIC_CMD_FLUSH:
             return sonicFlushStream(handle->stream) ? AVP_OK : AVP_ENOMEM;
 
@@ -307,9 +106,6 @@ avp_status_t avp_ae_sonic_control(avp_ae_sonic_t *handle,
             }
             *(uint32_t *)arg = (uint32_t)sonicSamplesAvailable(handle->stream);
             return AVP_OK;
-
-        case AVP_AE_SONIC_CMD_RESET:
-            return avp_ae_sonic_recreate_stream(handle);
 
         default:
             return AVP_EINVAL;
