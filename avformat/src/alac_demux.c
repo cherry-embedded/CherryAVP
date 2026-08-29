@@ -5,10 +5,7 @@
  */
 #include "alac_container.h"
 
-#include <string.h>
-
 #include "ALACAudioTypes.h"
-#include "avp_util.h"
 
 #define ALAC_CAF_HEADER_SIZE       8u
 #define ALAC_CAF_CHUNK_HEADER_SIZE 12u

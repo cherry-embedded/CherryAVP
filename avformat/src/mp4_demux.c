@@ -368,148 +368,98 @@ static avp_status_t mp4_parse_audio_specific_config(const uint8_t *buffer,
     return AVP_OK;
 }
 
-static avp_status_t mp4_next_box(const uint8_t *buffer,
-                                 uint32_t buffer_size,
-                                 uint32_t parent_start,
-                                 uint32_t parent_size,
-                                 uint32_t *pos,
-                                 mp4_box_t *box)
+#define MP4_READ_MEMORY_BOX(_buffer, _buffer_size, _current, _end, _box, _status) \
+    do {                                                                          \
+        const uint8_t *mp4_mem_buffer = (_buffer);                                \
+        uint32_t mp4_mem_buffer_size = (_buffer_size);                            \
+        uint32_t mp4_current = (_current);                                        \
+        uint32_t mp4_end = (_end);                                                \
+        mp4_box_t *mp4_box = (_box);                                              \
+        uint64_t mp4_size;                                                        \
+        uint32_t mp4_header_size = 8u;                                            \
+                                                                                  \
+        if (mp4_mem_buffer == NULL || mp4_box == NULL ||                          \
+            mp4_current > mp4_end || mp4_end > mp4_mem_buffer_size) {             \
+            (_status) = AVP_EINVAL;                                               \
+        } else if (mp4_end - mp4_current < 8u) {                                  \
+            (_status) = AVP_EBADHEADER;                                           \
+        } else {                                                                  \
+            mp4_size = AVP_GET_BE32(mp4_mem_buffer + mp4_current);                \
+            memset(mp4_box, 0, sizeof(*mp4_box));                                 \
+            mp4_box->start = mp4_current;                                         \
+            mp4_box->type = MP4_FOURCC(mp4_mem_buffer[mp4_current + 4u],          \
+                                       mp4_mem_buffer[mp4_current + 5u],          \
+                                       mp4_mem_buffer[mp4_current + 6u],          \
+                                       mp4_mem_buffer[mp4_current + 7u]);         \
+            if (mp4_size == 1u) {                                                 \
+                if (mp4_end - mp4_current < 16u) {                                \
+                    (_status) = AVP_EBADHEADER;                                   \
+                    break;                                                        \
+                }                                                                 \
+                mp4_size = AVP_GET_BE64(mp4_mem_buffer + mp4_current + 8u);       \
+                mp4_header_size = 16u;                                            \
+            } else if (mp4_size == 0u) {                                          \
+                mp4_size = mp4_end - mp4_current;                                 \
+            }                                                                     \
+            if (mp4_size < mp4_header_size || mp4_size > mp4_end - mp4_current || \
+                mp4_size > UINT32_MAX) {                                          \
+                (_status) = AVP_EBADHEADER;                                       \
+            } else {                                                              \
+                mp4_box->size = (uint32_t)mp4_size;                               \
+                mp4_box->header_size = mp4_header_size;                           \
+                (_status) = AVP_OK;                                               \
+            }                                                                     \
+        }                                                                         \
+    } while (0)
+
+static avp_status_t mp4_parse_box_header(mp4_demux_t *demuxer,
+                                         uint32_t current,
+                                         uint32_t end,
+                                         mp4_box_t *box)
 {
-    uint32_t parent_end;
-    uint64_t size;
+    uint8_t header[16];
+    uint64_t box_size;
     uint32_t header_size = 8u;
-
-    if (buffer == NULL || pos == NULL || box == NULL ||
-        parent_start > buffer_size || parent_size > buffer_size - parent_start) {
-        return AVP_EINVAL;
-    }
-
-    parent_end = parent_start + parent_size;
-    if (*pos >= parent_end) {
-        return AVP_ENOENT;
-    }
-    if (parent_end - *pos < 8u) {
-        return AVP_EBADHEADER;
-    }
-
-    size = AVP_GET_BE32(buffer + *pos);
-    memset(box, 0, sizeof(*box));
-    box->start = *pos;
-    box->type = MP4_FOURCC(buffer[*pos + 4u],
-                           buffer[*pos + 5u],
-                           buffer[*pos + 6u],
-                           buffer[*pos + 7u]);
-
-    if (size == 1u) {
-        if (parent_end - *pos < 16u) {
-            return AVP_EBADHEADER;
-        }
-        size = AVP_GET_BE64(buffer + *pos + 8u);
-        header_size = 16u;
-    } else if (size == 0u) {
-        size = parent_end - *pos;
-    }
-
-    if (size < header_size || size > parent_end - *pos || size > UINT32_MAX) {
-        return AVP_EBADHEADER;
-    }
-
-    box->size = (uint32_t)size;
-    box->header_size = header_size;
-    *pos += (uint32_t)size;
-    return AVP_OK;
-}
-
-static avp_status_t mp4_find_child(const uint8_t *buffer,
-                                   uint32_t buffer_size,
-                                   uint32_t parent_start,
-                                   uint32_t parent_size,
-                                   mp4_fourcc_t type,
-                                   mp4_box_t *out)
-{
-    uint32_t pos = parent_start;
-
-    for (;;) {
-        mp4_box_t box;
-        avp_status_t st;
-
-        st = mp4_next_box(buffer, buffer_size, parent_start, parent_size, &pos, &box);
-        if (st != AVP_OK) {
-            return st;
-        }
-        if (box.type == type) {
-            *out = box;
-            return AVP_OK;
-        }
-    }
-}
-
-static avp_status_t mp4_read_moov(mp4_demux_t *demuxer,
-                                  uint8_t **moov_buffer,
-                                  uint32_t *moov_size)
-{
-    uint32_t offset = 0u;
+    avp_status_t st;
 
     if (demuxer == NULL || demuxer->common.avp_io == NULL ||
-        moov_buffer == NULL || moov_size == NULL) {
+        box == NULL || current > end || end > demuxer->common.file_size) {
         return AVP_EINVAL;
     }
+    if (end - current < 8u) {
+        return AVP_EBADHEADER;
+    }
 
-    *moov_buffer = NULL;
-    *moov_size = 0u;
-    while (offset + 8u <= demuxer->common.file_size) {
-        uint8_t header[16];
-        uint64_t box_size;
-        uint32_t header_size = 8u;
-        mp4_fourcc_t type;
-        avp_status_t st;
+    st = avp_io_read_at(demuxer->common.avp_io, current, header, 8u);
+    if (st != AVP_OK) {
+        return st;
+    }
 
-        st = avp_io_read_at(demuxer->common.avp_io, offset, header, 8u);
+    box_size = AVP_GET_BE32(header);
+    memset(box, 0, sizeof(*box));
+    box->start = current;
+    box->type = MP4_FOURCC(header[4], header[5], header[6], header[7]);
+    if (box_size == 1u) {
+        if (end - current < 16u) {
+            return AVP_EBADHEADER;
+        }
+        st = avp_io_read_at(demuxer->common.avp_io, current + 8u, header + 8u, 8u);
         if (st != AVP_OK) {
             return st;
         }
-
-        box_size = AVP_GET_BE32(header);
-        type = MP4_FOURCC(header[4], header[5], header[6], header[7]);
-        if (box_size == 1u) {
-            if (demuxer->common.file_size - offset < 16u) {
-                return AVP_EBADHEADER;
-            }
-            st = avp_io_read_at(demuxer->common.avp_io, offset + 8u, header + 8u, 8u);
-            if (st != AVP_OK) {
-                return st;
-            }
-            box_size = AVP_GET_BE64(header + 8u);
-            header_size = 16u;
-        } else if (box_size == 0u) {
-            box_size = demuxer->common.file_size - offset;
-        }
-
-        if (box_size < header_size || box_size > demuxer->common.file_size - offset ||
-            box_size > UINT32_MAX) {
-            return AVP_EBADHEADER;
-        }
-
-        if (type == MP4_FOURCC('m', 'o', 'o', 'v')) {
-            uint8_t *buffer = (uint8_t *)avp_malloc((size_t)box_size);
-
-            if (buffer == NULL) {
-                return AVP_ENOMEM;
-            }
-            st = avp_io_read_at(demuxer->common.avp_io, offset, buffer, (uint32_t)box_size);
-            if (st != AVP_OK) {
-                return st;
-            }
-
-            *moov_buffer = buffer;
-            *moov_size = (uint32_t)box_size;
-            return AVP_OK;
-        }
-
-        offset += (uint32_t)box_size;
+        box_size = AVP_GET_BE64(header + 8u);
+        header_size = 16u;
+    } else if (box_size == 0u) {
+        box_size = end - current;
     }
 
-    return AVP_ENOENT;
+    if (box_size < header_size || box_size > end - current || box_size > UINT32_MAX) {
+        return AVP_EBADHEADER;
+    }
+
+    box->size = (uint32_t)box_size;
+    box->header_size = header_size;
+    return AVP_OK;
 }
 
 static avp_status_t mp4_read_descriptor_length(const uint8_t *buffer,
@@ -807,79 +757,61 @@ static avp_status_t mp4_parse_video_sample_entry(const uint8_t *buffer,
     }
 
     if (type == MP4_FOURCC('m', 'p', '4', 'v')) {
-        mp4_box_t esds;
-        uint8_t object_type;
-        avp_status_t st;
+        uint64_t current = entry_start + 86u;
+        uint64_t end = (uint64_t)entry_start + entry_size;
 
         /* MP4 stores MJPEG under mp4v with JPEG object type indication. */
-        st = mp4_find_child(buffer,
-                            buffer_size,
-                            entry_start + 86u,
-                            entry_size - 86u,
-                            MP4_FOURCC('e', 's', 'd', 's'),
-                            &esds);
-        if (st != AVP_OK || esds.size - esds.header_size < 5u) {
-            return AVP_EUNSUPPORTED;
-        }
-        st = mp4_find_decoder_object_type(buffer + esds.start + esds.header_size + 4u,
-                                          esds.size - esds.header_size - 4u,
-                                          &object_type);
-        if (st != AVP_OK) {
-            return AVP_EUNSUPPORTED;
+        while (current + 8u <= end) {
+            mp4_box_t esds;
+            uint8_t object_type;
+            avp_status_t st;
+
+            MP4_READ_MEMORY_BOX(buffer,
+                                buffer_size,
+                                (uint32_t)current,
+                                (uint32_t)end,
+                                &esds,
+                                st);
+            if (st != AVP_OK) {
+                return st;
+            }
+
+            switch (esds.type) {
+                case MP4_FOURCC('e', 's', 'd', 's'):
+                    if (esds.size - esds.header_size < 5u) {
+                        return AVP_EUNSUPPORTED;
+                    }
+                    st = mp4_find_decoder_object_type(buffer + esds.start + esds.header_size + 4u,
+                                                      esds.size - esds.header_size - 4u,
+                                                      &object_type);
+                    if (st != AVP_OK) {
+                        return AVP_EUNSUPPORTED;
+                    }
+
+                    if (object_type == MP4_OBJECT_TYPE_MPEG4_VIDEO) {
+                        track->video_codec = MP4_VIDEO_CODEC_MPEG4;
+                    } else if (object_type >= MP4_OBJECT_TYPE_MPEG2_VIDEO_MIN &&
+                               object_type <= MP4_OBJECT_TYPE_MPEG2_VIDEO_MAX) {
+                        track->video_codec = MP4_VIDEO_CODEC_MPEG2;
+                    } else if (object_type == 0x6au) {
+                        track->video_codec = MP4_VIDEO_CODEC_MPEG1;
+                    } else if (object_type == MP4_OBJECT_TYPE_JPEG) {
+                        track->video_codec = MP4_VIDEO_CODEC_MJPEG;
+                    } else {
+                        return AVP_EUNSUPPORTED;
+                    }
+                    return AVP_OK;
+                default:
+                    break;
+            }
+
+            current = (uint64_t)esds.start + esds.size;
         }
 
-        if (object_type == MP4_OBJECT_TYPE_MPEG4_VIDEO) {
-            track->video_codec = MP4_VIDEO_CODEC_MPEG4;
-        } else if (object_type >= MP4_OBJECT_TYPE_MPEG2_VIDEO_MIN &&
-                   object_type <= MP4_OBJECT_TYPE_MPEG2_VIDEO_MAX) {
-            track->video_codec = MP4_VIDEO_CODEC_MPEG2;
-        } else if (object_type == 0x6au) {
-            track->video_codec = MP4_VIDEO_CODEC_MPEG1;
-        } else if (object_type == MP4_OBJECT_TYPE_JPEG) {
-            track->video_codec = MP4_VIDEO_CODEC_MJPEG;
-        } else {
-            return AVP_EUNSUPPORTED;
-        }
-        return AVP_OK;
+        return current == end ? AVP_EUNSUPPORTED : AVP_EBADHEADER;
     }
 
     return AVP_EUNSUPPORTED;
-}
-
-static avp_status_t mp4_find_audio_esds(const uint8_t *buffer,
-                                        uint32_t buffer_size,
-                                        uint32_t child_start,
-                                        uint32_t child_size,
-                                        mp4_box_t *esds)
-{
-    mp4_box_t wave;
-    avp_status_t st;
-
-    st = mp4_find_child(buffer,
-                        buffer_size,
-                        child_start,
-                        child_size,
-                        MP4_FOURCC('e', 's', 'd', 's'),
-                        esds);
-    if (st == AVP_OK) {
-        return AVP_OK;
-    }
-
-    st = mp4_find_child(buffer,
-                        buffer_size,
-                        child_start,
-                        child_size,
-                        MP4_FOURCC('w', 'a', 'v', 'e'),
-                        &wave);
-    if (st != AVP_OK) {
-        return st;
-    }
-    return mp4_find_child(buffer,
-                          buffer_size,
-                          wave.start + wave.header_size,
-                          wave.size - wave.header_size,
-                          MP4_FOURCC('e', 's', 'd', 's'),
-                          esds);
 }
 
 static avp_status_t mp4_parse_alac_config(const uint8_t *buffer,
@@ -889,10 +821,10 @@ static avp_status_t mp4_parse_alac_config(const uint8_t *buffer,
                                           alac_dec_config_t *config)
 {
     mp4_box_t atom;
-    uint32_t child_start;
-    uint32_t child_size;
     uint32_t cookie_size;
-    avp_status_t st;
+    uint64_t current;
+    uint64_t end;
+    int found = 0;
 
     if (buffer == NULL || config == NULL ||
         entry_size < 36u ||
@@ -901,34 +833,75 @@ static avp_status_t mp4_parse_alac_config(const uint8_t *buffer,
         return AVP_EBADHEADER;
     }
 
-    child_start = entry_start + 36u;
-    child_size = entry_size - 36u;
-    st = mp4_find_child(buffer,
-                        buffer_size,
-                        child_start,
-                        child_size,
-                        MP4_FOURCC('a', 'l', 'a', 'c'),
-                        &atom);
-    if (st != AVP_OK) {
-        mp4_box_t wave;
+    current = entry_start + 36u;
+    end = (uint64_t)entry_start + entry_size;
+    while (current + 8u <= end) {
+        avp_status_t st;
 
-        st = mp4_find_child(buffer,
+        MP4_READ_MEMORY_BOX(buffer,
                             buffer_size,
-                            child_start,
-                            child_size,
-                            MP4_FOURCC('w', 'a', 'v', 'e'),
-                            &wave);
-        if (st == AVP_OK) {
-            st = mp4_find_child(buffer,
-                                buffer_size,
-                                wave.start + wave.header_size,
-                                wave.size - wave.header_size,
-                                MP4_FOURCC('a', 'l', 'a', 'c'),
-                                &atom);
+                            (uint32_t)current,
+                            (uint32_t)end,
+                            &atom,
+                            st);
+        if (st != AVP_OK) {
+            return st;
         }
+
+        switch (atom.type) {
+            case MP4_FOURCC('a', 'l', 'a', 'c'):
+                found = 1;
+                break;
+            case MP4_FOURCC('w', 'a', 'v', 'e'): {
+                uint64_t wave_current = atom.start + atom.header_size;
+                uint64_t wave_end = (uint64_t)atom.start + atom.size;
+
+                while (wave_current + 8u <= wave_end) {
+                    mp4_box_t wave_child;
+
+                    MP4_READ_MEMORY_BOX(buffer,
+                                        buffer_size,
+                                        (uint32_t)wave_current,
+                                        (uint32_t)wave_end,
+                                        &wave_child,
+                                        st);
+                    if (st != AVP_OK) {
+                        return st;
+                    }
+                    switch (wave_child.type) {
+                        case MP4_FOURCC('a', 'l', 'a', 'c'):
+                            atom = wave_child;
+                            found = 1;
+                            break;
+                        default:
+                            break;
+                    }
+                    if (found != 0) {
+                        break;
+                    }
+                    wave_current = (uint64_t)wave_child.start + wave_child.size;
+                }
+                if (wave_current != wave_end && found == 0) {
+                    return AVP_EBADHEADER;
+                }
+                break;
+            }
+            default:
+                break;
+        }
+        if (found != 0) {
+            break;
+        }
+        current = (uint64_t)atom.start + atom.size;
     }
-    if (st != AVP_OK || atom.size < atom.header_size + 4u + sizeof(ALACSpecificConfig)) {
-        return st == AVP_ENOENT ? AVP_EUNSUPPORTED : st;
+    if (current != end && found == 0) {
+        return AVP_EBADHEADER;
+    }
+    if (found == 0) {
+        return AVP_EUNSUPPORTED;
+    }
+    if (atom.size < atom.header_size + 4u + sizeof(ALACSpecificConfig)) {
+        return AVP_EBADHEADER;
     }
 
     cookie_size = atom.size - atom.header_size - 4u;
@@ -1013,6 +986,9 @@ static avp_status_t mp4_parse_audio_sample_entry(const uint8_t *buffer,
         const uint8_t *asc;
         uint32_t asc_size;
         uint8_t object_type;
+        uint64_t current;
+        uint64_t end;
+        int found_esds = 0;
         avp_status_t st;
 
         st = mp4_parse_alac_config(buffer,
@@ -1025,12 +1001,69 @@ static avp_status_t mp4_parse_audio_sample_entry(const uint8_t *buffer,
             return AVP_OK;
         }
 
-        st = mp4_find_audio_esds(buffer,
-                                 buffer_size,
-                                 entry_start + child_offset,
-                                 entry_size - child_offset,
-                                 &esds);
-        if (st != AVP_OK || esds.size - esds.header_size < 5u) {
+        current = entry_start + child_offset;
+        end = (uint64_t)entry_start + entry_size;
+        while (current + 8u <= end) {
+            MP4_READ_MEMORY_BOX(buffer,
+                                buffer_size,
+                                (uint32_t)current,
+                                (uint32_t)end,
+                                &esds,
+                                st);
+            if (st != AVP_OK) {
+                return st;
+            }
+
+            switch (esds.type) {
+                case MP4_FOURCC('e', 's', 'd', 's'):
+                    found_esds = 1;
+                    break;
+                case MP4_FOURCC('w', 'a', 'v', 'e'): {
+                    uint64_t wave_current = esds.start + esds.header_size;
+                    uint64_t wave_end = (uint64_t)esds.start + esds.size;
+
+                    while (wave_current + 8u <= wave_end) {
+                        mp4_box_t wave_child;
+
+                        MP4_READ_MEMORY_BOX(buffer,
+                                            buffer_size,
+                                            (uint32_t)wave_current,
+                                            (uint32_t)wave_end,
+                                            &wave_child,
+                                            st);
+                        if (st != AVP_OK) {
+                            return st;
+                        }
+                        switch (wave_child.type) {
+                            case MP4_FOURCC('e', 's', 'd', 's'):
+                                esds = wave_child;
+                                found_esds = 1;
+                                break;
+                            default:
+                                break;
+                        }
+                        if (found_esds != 0) {
+                            break;
+                        }
+                        wave_current = (uint64_t)wave_child.start + wave_child.size;
+                    }
+                    if (wave_current != wave_end && found_esds == 0) {
+                        return AVP_EBADHEADER;
+                    }
+                    break;
+                }
+                default:
+                    break;
+            }
+            if (found_esds != 0) {
+                break;
+            }
+            current = (uint64_t)esds.start + esds.size;
+        }
+        if (current != end && found_esds == 0) {
+            return AVP_EBADHEADER;
+        }
+        if (found_esds == 0 || esds.size - esds.header_size < 5u) {
             return AVP_EUNSUPPORTED;
         }
         object_type = 0u;
@@ -1067,8 +1100,6 @@ static avp_status_t mp4_parse_audio_sample_entry(const uint8_t *buffer,
 
 static avp_status_t mp4_parse_stsd(const uint8_t *buffer,
                                    uint32_t buffer_size,
-                                   uint32_t payload_start,
-                                   uint32_t payload_size,
                                    mp4_track_t *track)
 {
     uint32_t entry_count;
@@ -1076,14 +1107,13 @@ static avp_status_t mp4_parse_stsd(const uint8_t *buffer,
     uint32_t end;
     uint32_t i;
 
-    if (payload_size < 8u || payload_start > buffer_size ||
-        payload_size > buffer_size - payload_start) {
+    if (buffer == NULL || track == NULL || buffer_size < 8u) {
         return AVP_EBADHEADER;
     }
 
-    entry_count = AVP_GET_BE32(buffer + payload_start + 4u);
-    pos = payload_start + 8u;
-    end = payload_start + payload_size;
+    entry_count = AVP_GET_BE32(buffer + 4u);
+    pos = 8u;
+    end = buffer_size;
     for (i = 0u; i < entry_count; i++) {
         uint32_t entry_size;
         avp_status_t st;
@@ -1124,23 +1154,22 @@ static avp_status_t mp4_parse_stsd(const uint8_t *buffer,
 }
 
 static avp_status_t mp4_parse_stsz(const uint8_t *buffer,
-                                   uint32_t payload_start,
-                                   uint32_t payload_size,
+                                   uint32_t buffer_size,
                                    mp4_track_t *track)
 {
     uint32_t default_size;
     uint32_t sample_count;
     uint32_t i;
 
-    if (payload_size < 12u) {
+    if (buffer == NULL || track == NULL || buffer_size < 12u) {
         return AVP_EBADHEADER;
     }
 
-    default_size = AVP_GET_BE32(buffer + payload_start + 4u);
-    sample_count = AVP_GET_BE32(buffer + payload_start + 8u);
+    default_size = AVP_GET_BE32(buffer + 4u);
+    sample_count = AVP_GET_BE32(buffer + 8u);
     if (sample_count == 0u ||
         sample_count > UINT32_MAX / (uint32_t)sizeof(uint32_t) ||
-        (default_size == 0u && sample_count > (payload_size - 12u) / 4u)) {
+        (default_size == 0u && sample_count > (buffer_size - 12u) / 4u)) {
         return AVP_EBADHEADER;
     }
     if (track->sample_sizes != NULL) {
@@ -1156,7 +1185,7 @@ static avp_status_t mp4_parse_stsz(const uint8_t *buffer,
     for (i = 0u; i < sample_count; i++) {
         uint32_t sample_size = default_size != 0u ?
                                    default_size :
-                                   AVP_GET_BE32(buffer + payload_start + 12u + i * 4u);
+                                   AVP_GET_BE32(buffer + 12u + i * 4u);
 
         if (sample_size == 0u) {
             return AVP_EBADHEADER;
@@ -1171,21 +1200,20 @@ static avp_status_t mp4_parse_stsz(const uint8_t *buffer,
 }
 
 static avp_status_t mp4_parse_stsc(const uint8_t *buffer,
-                                   uint32_t payload_start,
-                                   uint32_t payload_size,
+                                   uint32_t buffer_size,
                                    mp4_track_t *track)
 {
     uint32_t entry_count;
     uint32_t i;
 
-    if (payload_size < 8u) {
+    if (buffer == NULL || track == NULL || buffer_size < 8u) {
         return AVP_EBADHEADER;
     }
 
-    entry_count = AVP_GET_BE32(buffer + payload_start + 4u);
+    entry_count = AVP_GET_BE32(buffer + 4u);
     if (entry_count == 0u ||
         entry_count > UINT32_MAX / (uint32_t)sizeof(mp4_stsc_entry_t) ||
-        entry_count > (payload_size - 8u) / 12u) {
+        entry_count > (buffer_size - 8u) / 12u) {
         return AVP_EBADHEADER;
     }
     if (track->stsc != NULL) {
@@ -1198,7 +1226,7 @@ static avp_status_t mp4_parse_stsc(const uint8_t *buffer,
     }
     track->stsc_count = entry_count;
     for (i = 0u; i < entry_count; i++) {
-        const uint8_t *entry = buffer + payload_start + 8u + i * 12u;
+        const uint8_t *entry = buffer + 8u + i * 12u;
 
         track->stsc[i].first_chunk = AVP_GET_BE32(entry);
         track->stsc[i].samples_per_chunk = AVP_GET_BE32(entry + 4u);
@@ -1218,8 +1246,7 @@ static avp_status_t mp4_parse_stsc(const uint8_t *buffer,
 }
 
 static avp_status_t mp4_parse_stco(const uint8_t *buffer,
-                                   uint32_t payload_start,
-                                   uint32_t payload_size,
+                                   uint32_t buffer_size,
                                    uint8_t co64,
                                    mp4_track_t *track)
 {
@@ -1227,14 +1254,14 @@ static avp_status_t mp4_parse_stco(const uint8_t *buffer,
     uint32_t entry_count;
     uint32_t i;
 
-    if (payload_size < 8u) {
+    if (buffer == NULL || track == NULL || buffer_size < 8u) {
         return AVP_EBADHEADER;
     }
 
-    entry_count = AVP_GET_BE32(buffer + payload_start + 4u);
+    entry_count = AVP_GET_BE32(buffer + 4u);
     if (entry_count == 0u ||
         entry_count > UINT32_MAX / (uint32_t)sizeof(uint32_t) ||
-        entry_count > (payload_size - 8u) / field_size) {
+        entry_count > (buffer_size - 8u) / field_size) {
         return AVP_EBADHEADER;
     }
     if (track->chunk_offsets != NULL) {
@@ -1247,7 +1274,7 @@ static avp_status_t mp4_parse_stco(const uint8_t *buffer,
     }
     track->chunk_count = entry_count;
     for (i = 0u; i < entry_count; i++) {
-        const uint8_t *entry = buffer + payload_start + 8u + i * field_size;
+        const uint8_t *entry = buffer + 8u + i * field_size;
         uint64_t offset = co64 != 0u ? AVP_GET_BE64(entry) : AVP_GET_BE32(entry);
 
         if (offset > UINT32_MAX) {
@@ -1260,209 +1287,30 @@ static avp_status_t mp4_parse_stco(const uint8_t *buffer,
 }
 
 static avp_status_t mp4_parse_mdhd(const uint8_t *buffer,
-                                   uint32_t payload_start,
-                                   uint32_t payload_size,
+                                   uint32_t buffer_size,
                                    mp4_track_t *track)
 {
     uint8_t version;
 
-    if (payload_size < 20u) {
+    if (buffer == NULL || track == NULL || buffer_size < 20u) {
         return AVP_EBADHEADER;
     }
 
-    version = buffer[payload_start];
+    version = buffer[0];
     if (version == 0u) {
-        track->timescale = AVP_GET_BE32(buffer + payload_start + 12u);
-        track->duration = AVP_GET_BE32(buffer + payload_start + 16u);
+        track->timescale = AVP_GET_BE32(buffer + 12u);
+        track->duration = AVP_GET_BE32(buffer + 16u);
     } else if (version == 1u) {
-        if (payload_size < 32u) {
+        if (buffer_size < 32u) {
             return AVP_EBADHEADER;
         }
-        track->timescale = AVP_GET_BE32(buffer + payload_start + 20u);
-        track->duration = AVP_GET_BE64(buffer + payload_start + 24u);
+        track->timescale = AVP_GET_BE32(buffer + 20u);
+        track->duration = AVP_GET_BE64(buffer + 24u);
     } else {
         return AVP_EUNSUPPORTED;
     }
 
     return track->timescale != 0u ? AVP_OK : AVP_EBADHEADER;
-}
-
-static avp_status_t mp4_get_trak_media(const uint8_t *buffer,
-                                       uint32_t buffer_size,
-                                       uint32_t payload_start,
-                                       uint32_t payload_size,
-                                       mp4_box_t *mdia,
-                                       avp_packet_type_t *type)
-{
-    mp4_box_t hdlr;
-    uint32_t handler_start;
-    mp4_fourcc_t handler;
-    avp_status_t st;
-
-    st = mp4_find_child(buffer,
-                        buffer_size,
-                        payload_start,
-                        payload_size,
-                        MP4_FOURCC('m', 'd', 'i', 'a'),
-                        mdia);
-    if (st != AVP_OK) {
-        return st;
-    }
-    st = mp4_find_child(buffer,
-                        buffer_size,
-                        mdia->start + mdia->header_size,
-                        mdia->size - mdia->header_size,
-                        MP4_FOURCC('h', 'd', 'l', 'r'),
-                        &hdlr);
-    if (st != AVP_OK || hdlr.size - hdlr.header_size < 12u) {
-        return AVP_EBADHEADER;
-    }
-
-    handler_start = hdlr.start + hdlr.header_size;
-    handler = MP4_FOURCC(buffer[handler_start + 8u],
-                         buffer[handler_start + 9u],
-                         buffer[handler_start + 10u],
-                         buffer[handler_start + 11u]);
-    if (handler == MP4_FOURCC('v', 'i', 'd', 'e')) {
-        *type = AVP_PACKET_TYPE_VIDEO;
-    } else if (handler == MP4_FOURCC('s', 'o', 'u', 'n')) {
-        *type = AVP_PACKET_TYPE_AUDIO;
-    } else {
-        *type = AVP_PACKET_TYPE_UNKNOWN;
-    }
-    return AVP_OK;
-}
-
-static avp_status_t mp4_parse_stbl(const uint8_t *buffer,
-                                   uint32_t buffer_size,
-                                   uint32_t payload_start,
-                                   uint32_t payload_size,
-                                   mp4_track_t *track)
-{
-    uint32_t pos = payload_start;
-
-    for (;;) {
-        mp4_box_t box;
-        uint32_t box_payload;
-        uint32_t box_payload_size;
-        avp_status_t st;
-
-        st = mp4_next_box(buffer, buffer_size, payload_start, payload_size, &pos, &box);
-        if (st == AVP_ENOENT) {
-            break;
-        }
-        if (st != AVP_OK) {
-            return st;
-        }
-
-        box_payload = box.start + box.header_size;
-        box_payload_size = box.size - box.header_size;
-        if (box.type == MP4_FOURCC('s', 't', 's', 'd')) {
-            st = mp4_parse_stsd(buffer, buffer_size, box_payload, box_payload_size, track);
-        } else if (box.type == MP4_FOURCC('s', 't', 's', 'z')) {
-            st = mp4_parse_stsz(buffer, box_payload, box_payload_size, track);
-        } else if (box.type == MP4_FOURCC('s', 't', 's', 'c')) {
-            st = mp4_parse_stsc(buffer, box_payload, box_payload_size, track);
-        } else if (box.type == MP4_FOURCC('s', 't', 'c', 'o')) {
-            st = mp4_parse_stco(buffer, box_payload, box_payload_size, 0u, track);
-        } else if (box.type == MP4_FOURCC('c', 'o', '6', '4')) {
-            st = mp4_parse_stco(buffer, box_payload, box_payload_size, 1u, track);
-        } else {
-            st = AVP_OK;
-        }
-
-        if (st != AVP_OK) {
-            return st;
-        }
-    }
-
-    if ((track->type == AVP_PACKET_TYPE_VIDEO &&
-         track->video_codec == MP4_VIDEO_CODEC_UNKNOWN) ||
-        (track->type == AVP_PACKET_TYPE_AUDIO &&
-         track->audio_codec == MP4_AUDIO_CODEC_UNKNOWN)) {
-        return AVP_EUNSUPPORTED;
-    }
-    if (track->sample_sizes == NULL || track->stsc == NULL ||
-        track->chunk_offsets == NULL) {
-        return AVP_EBADHEADER;
-    }
-    return AVP_OK;
-}
-
-static avp_status_t mp4_parse_trak(const uint8_t *buffer,
-                                   uint32_t buffer_size,
-                                   const mp4_box_t *trak,
-                                   uint32_t stream_index,
-                                   mp4_track_t *track)
-{
-    mp4_box_t mdia;
-    mp4_box_t mdhd;
-    mp4_box_t minf;
-    mp4_box_t stbl;
-    avp_packet_type_t type;
-    uint32_t mdia_start;
-    uint32_t mdia_size;
-    avp_status_t st;
-
-    memset(track, 0, sizeof(*track));
-    st = mp4_get_trak_media(buffer,
-                            buffer_size,
-                            trak->start + trak->header_size,
-                            trak->size - trak->header_size,
-                            &mdia,
-                            &type);
-    if (st != AVP_OK) {
-        return st;
-    }
-    if (type != AVP_PACKET_TYPE_VIDEO && type != AVP_PACKET_TYPE_AUDIO) {
-        return AVP_ENOENT;
-    }
-
-    track->type = type;
-    track->stream_index = stream_index;
-    mdia_start = mdia.start + mdia.header_size;
-    mdia_size = mdia.size - mdia.header_size;
-    st = mp4_find_child(buffer,
-                        buffer_size,
-                        mdia_start,
-                        mdia_size,
-                        MP4_FOURCC('m', 'd', 'h', 'd'),
-                        &mdhd);
-    if (st != AVP_OK) {
-        return st;
-    }
-    st = mp4_parse_mdhd(buffer,
-                        mdhd.start + mdhd.header_size,
-                        mdhd.size - mdhd.header_size,
-                        track);
-    if (st != AVP_OK) {
-        return st;
-    }
-
-    st = mp4_find_child(buffer,
-                        buffer_size,
-                        mdia_start,
-                        mdia_size,
-                        MP4_FOURCC('m', 'i', 'n', 'f'),
-                        &minf);
-    if (st != AVP_OK) {
-        return st;
-    }
-    st = mp4_find_child(buffer,
-                        buffer_size,
-                        minf.start + minf.header_size,
-                        minf.size - minf.header_size,
-                        MP4_FOURCC('s', 't', 'b', 'l'),
-                        &stbl);
-    if (st != AVP_OK) {
-        return st;
-    }
-
-    return mp4_parse_stbl(buffer,
-                          buffer_size,
-                          stbl.start + stbl.header_size,
-                          stbl.size - stbl.header_size,
-                          track);
 }
 
 static avp_status_t mp4_build_sample_offsets(mp4_track_t *track, uint32_t file_size)
@@ -1556,93 +1404,303 @@ static void mp4_take_audio_track(mp4_demux_t *demuxer, mp4_track_t *track)
     track->sample_offsets = NULL;
 }
 
-static avp_status_t mp4_parse_moov(const uint8_t *buffer,
-                                   uint32_t buffer_size,
-                                   mp4_demux_t *demuxer)
+static int mp4_is_nested_box(mp4_fourcc_t type)
 {
-    mp4_box_t moov;
-    uint64_t declared_size;
-    uint32_t pos;
-    uint32_t stream_index = 0u;
-    avp_status_t st;
+    switch (type) {
+        case MP4_FOURCC('m', 'o', 'o', 'v'):
+        case MP4_FOURCC('t', 'r', 'a', 'k'):
+        case MP4_FOURCC('m', 'd', 'i', 'a'):
+        case MP4_FOURCC('m', 'i', 'n', 'f'):
+        case MP4_FOURCC('s', 't', 'b', 'l'):
+        case MP4_FOURCC('e', 'd', 't', 's'):
+        case MP4_FOURCC('d', 'i', 'n', 'f'):
+        case MP4_FOURCC('u', 'd', 't', 'a'):
+        case MP4_FOURCC('m', 'v', 'e', 'x'):
+        case MP4_FOURCC('m', 'o', 'o', 'f'):
+        case MP4_FOURCC('t', 'r', 'a', 'f'):
+        case MP4_FOURCC('m', 'f', 'r', 'a'):
+        case MP4_FOURCC('w', 'a', 'v', 'e'):
+            return 1;
+        default:
+            return 0;
+    }
+}
 
-    if (buffer == NULL || buffer_size < 8u || demuxer == NULL) {
+static avp_status_t mp4_parse_file_boxes(mp4_demux_t *demuxer,
+                                         uint32_t start,
+                                         uint32_t end,
+                                         mp4_track_t *track,
+                                         uint32_t *stream_index,
+                                         uint32_t depth)
+{
+    uint64_t current = start;
+
+    if (demuxer == NULL || demuxer->common.avp_io == NULL ||
+        stream_index == NULL || start > end || end > demuxer->common.file_size) {
         return AVP_EINVAL;
     }
-    declared_size = AVP_GET_BE32(buffer);
-    if (declared_size == 1u) {
-        if (buffer_size < 16u) {
-            return AVP_EBADHEADER;
-        }
-        declared_size = AVP_GET_BE64(buffer + 8u);
-    } else if (declared_size == 0u) {
-        declared_size = buffer_size;
-    }
-    if (declared_size != buffer_size ||
-        MP4_FOURCC(buffer[4], buffer[5], buffer[6], buffer[7]) !=
-            MP4_FOURCC('m', 'o', 'o', 'v')) {
-        return AVP_EBADHEADER;
-    }
 
-    memset(&moov, 0, sizeof(moov));
-    moov.start = 0u;
-    moov.size = buffer_size;
-    moov.header_size = AVP_GET_BE32(buffer) == 1u ? 16u : 8u;
-    moov.type = MP4_FOURCC('m', 'o', 'o', 'v');
-    pos = moov.header_size;
+    while (current + 8u <= end) {
+        mp4_box_t box;
+        uint32_t box_payload;
+        uint32_t box_data_size;
+        avp_status_t st;
+        int is_track_box;
+        int parse_children;
 
-    for (;;) {
-        mp4_box_t trak;
-
-        st = mp4_next_box(buffer,
-                          buffer_size,
-                          moov.header_size,
-                          moov.size - moov.header_size,
-                          &pos,
-                          &trak);
-        if (st == AVP_ENOENT) {
-            break;
-        }
+        st = mp4_parse_box_header(demuxer, (uint32_t)current, end, &box);
         if (st != AVP_OK) {
             return st;
         }
-        if (trak.type != MP4_FOURCC('t', 'r', 'a', 'k')) {
-            continue;
+
+        box_payload = box.start + box.header_size;
+        box_data_size = box.size - box.header_size;
+        is_track_box = box.type == MP4_FOURCC('t', 'r', 'a', 'k');
+        parse_children = mp4_is_nested_box(box.type) != 0 && box.size > box.header_size;
+
+        // char box_str[5] = { 0 };
+        // avp_fourcc_to_string(box.type, box_str);
+        // printf("%*s[%s], offset %u, size %u\n",
+        //        depth * 2,
+        //        "",
+        //        box_str,
+        //        box.start,
+        //        box.size);
+
+        switch (box.type) {
+            case MP4_FOURCC('h', 'd', 'l', 'r'):
+                if (track != NULL) {
+                    uint8_t handler_buffer[12];
+                    mp4_fourcc_t handler;
+
+                    if (box_data_size < 12u) {
+                        return AVP_EBADHEADER;
+                    }
+                    st = avp_io_read_at(demuxer->common.avp_io,
+                                        box_payload,
+                                        handler_buffer,
+                                        sizeof(handler_buffer));
+                    if (st != AVP_OK) {
+                        return st;
+                    }
+                    handler = MP4_FOURCC(handler_buffer[8],
+                                         handler_buffer[9],
+                                         handler_buffer[10],
+                                         handler_buffer[11]);
+                    if (handler == MP4_FOURCC('v', 'i', 'd', 'e')) {
+                        track->type = AVP_PACKET_TYPE_VIDEO;
+                    } else if (handler == MP4_FOURCC('s', 'o', 'u', 'n')) {
+                        track->type = AVP_PACKET_TYPE_AUDIO;
+                    } else {
+                        track->type = AVP_PACKET_TYPE_UNKNOWN;
+                    }
+                }
+                break;
+            case MP4_FOURCC('m', 'd', 'h', 'd'):
+                if (track != NULL) {
+                    uint8_t *box_buffer = (uint8_t *)avp_malloc((size_t)box.size);
+
+                    if (box_buffer == NULL) {
+                        return AVP_ENOMEM;
+                    }
+                    st = avp_io_read_at(demuxer->common.avp_io,
+                                        box.start,
+                                        box_buffer,
+                                        box.size);
+                    if (st == AVP_OK) {
+                        st = mp4_parse_mdhd(box_buffer + box.header_size,
+                                            box.size - box.header_size,
+                                            track);
+                    }
+                    avp_free(box_buffer);
+                    if (st != AVP_OK) {
+                        return st;
+                    }
+                }
+                break;
+            case MP4_FOURCC('s', 't', 's', 'd'):
+                if (track != NULL) {
+                    uint8_t *box_buffer = (uint8_t *)avp_malloc((size_t)box.size);
+
+                    if (box_buffer == NULL) {
+                        return AVP_ENOMEM;
+                    }
+                    st = avp_io_read_at(demuxer->common.avp_io,
+                                        box.start,
+                                        box_buffer,
+                                        box.size);
+                    if (st == AVP_OK) {
+                        st = mp4_parse_stsd(box_buffer + box.header_size,
+                                            box.size - box.header_size,
+                                            track);
+                    }
+                    avp_free(box_buffer);
+                    if (st != AVP_OK) {
+                        return st;
+                    }
+                }
+                break;
+            case MP4_FOURCC('s', 't', 's', 'z'):
+                if (track != NULL) {
+                    uint8_t *box_buffer = (uint8_t *)avp_malloc((size_t)box.size);
+
+                    if (box_buffer == NULL) {
+                        return AVP_ENOMEM;
+                    }
+                    st = avp_io_read_at(demuxer->common.avp_io,
+                                        box.start,
+                                        box_buffer,
+                                        box.size);
+                    if (st == AVP_OK) {
+                        st = mp4_parse_stsz(box_buffer + box.header_size,
+                                            box.size - box.header_size,
+                                            track);
+                    }
+                    avp_free(box_buffer);
+                    if (st != AVP_OK) {
+                        return st;
+                    }
+                }
+                break;
+            case MP4_FOURCC('s', 't', 's', 'c'):
+                if (track != NULL) {
+                    uint8_t *box_buffer = (uint8_t *)avp_malloc((size_t)box.size);
+
+                    if (box_buffer == NULL) {
+                        return AVP_ENOMEM;
+                    }
+                    st = avp_io_read_at(demuxer->common.avp_io,
+                                        box.start,
+                                        box_buffer,
+                                        box.size);
+                    if (st == AVP_OK) {
+                        st = mp4_parse_stsc(box_buffer + box.header_size,
+                                            box.size - box.header_size,
+                                            track);
+                    }
+                    avp_free(box_buffer);
+                    if (st != AVP_OK) {
+                        return st;
+                    }
+                }
+                break;
+            case MP4_FOURCC('s', 't', 'c', 'o'):
+                if (track != NULL) {
+                    uint8_t *box_buffer = (uint8_t *)avp_malloc((size_t)box.size);
+
+                    if (box_buffer == NULL) {
+                        return AVP_ENOMEM;
+                    }
+                    st = avp_io_read_at(demuxer->common.avp_io,
+                                        box.start,
+                                        box_buffer,
+                                        box.size);
+                    if (st == AVP_OK) {
+                        st = mp4_parse_stco(box_buffer + box.header_size,
+                                            box.size - box.header_size,
+                                            0u,
+                                            track);
+                    }
+                    avp_free(box_buffer);
+                    if (st != AVP_OK) {
+                        return st;
+                    }
+                }
+                break;
+            case MP4_FOURCC('c', 'o', '6', '4'):
+                if (track != NULL) {
+                    uint8_t *box_buffer = (uint8_t *)avp_malloc((size_t)box.size);
+
+                    if (box_buffer == NULL) {
+                        return AVP_ENOMEM;
+                    }
+                    st = avp_io_read_at(demuxer->common.avp_io,
+                                        box.start,
+                                        box_buffer,
+                                        box.size);
+                    if (st == AVP_OK) {
+                        st = mp4_parse_stco(box_buffer + box.header_size,
+                                            box.size - box.header_size,
+                                            1u,
+                                            track);
+                    }
+                    avp_free(box_buffer);
+                    if (st != AVP_OK) {
+                        return st;
+                    }
+                }
+                break;
+            default:
+                break;
         }
 
-        mp4_track_t track;
+        if (parse_children) {
+            if (is_track_box) {
+                mp4_track_t child_track;
 
-        st = mp4_parse_trak(buffer, buffer_size, &trak, stream_index, &track);
-        if (st == AVP_OK) {
-            if ((track.type == AVP_PACKET_TYPE_VIDEO && demuxer->has_video == 0u) ||
-                (track.type == AVP_PACKET_TYPE_AUDIO && demuxer->has_audio == 0u)) {
-                st = mp4_build_sample_offsets(&track, demuxer->common.file_size);
+                memset(&child_track, 0, sizeof(child_track));
+                child_track.stream_index = *stream_index;
+                st = mp4_parse_file_boxes(demuxer,
+                                          box_payload,
+                                          box.start + box.size,
+                                          &child_track,
+                                          stream_index,
+                                          depth + 1);
                 if (st == AVP_OK) {
-                    if (track.type == AVP_PACKET_TYPE_VIDEO) {
-                        mp4_take_video_track(demuxer, &track);
-                    } else {
-                        mp4_take_audio_track(demuxer, &track);
+                    if (child_track.type != AVP_PACKET_TYPE_VIDEO &&
+                        child_track.type != AVP_PACKET_TYPE_AUDIO) {
+                        st = AVP_ENOENT;
+                    } else if ((child_track.type == AVP_PACKET_TYPE_VIDEO &&
+                                child_track.video_codec == MP4_VIDEO_CODEC_UNKNOWN) ||
+                               (child_track.type == AVP_PACKET_TYPE_AUDIO &&
+                                child_track.audio_codec == MP4_AUDIO_CODEC_UNKNOWN)) {
+                        st = AVP_EUNSUPPORTED;
+                    } else if (child_track.sample_sizes == NULL ||
+                               child_track.stsc == NULL ||
+                               child_track.chunk_offsets == NULL) {
+                        st = AVP_EBADHEADER;
+                    } else if ((child_track.type == AVP_PACKET_TYPE_VIDEO &&
+                                demuxer->has_video == 0u) ||
+                               (child_track.type == AVP_PACKET_TYPE_AUDIO &&
+                                demuxer->has_audio == 0u)) {
+                        st = mp4_build_sample_offsets(&child_track, demuxer->common.file_size);
+                        if (st == AVP_OK) {
+                            if (child_track.type == AVP_PACKET_TYPE_VIDEO) {
+                                mp4_take_video_track(demuxer, &child_track);
+                            } else {
+                                mp4_take_audio_track(demuxer, &child_track);
+                            }
+                        }
                     }
+                }
+                mp4_track_deinit(&child_track);
+                if (st != AVP_OK && st != AVP_ENOENT && st != AVP_EUNSUPPORTED) {
+                    return st;
+                }
+                (*stream_index)++;
+            } else {
+                st = mp4_parse_file_boxes(demuxer,
+                                          box_payload,
+                                          box.start + box.size,
+                                          track,
+                                          stream_index,
+                                          depth + 1);
+                if (st != AVP_OK) {
+                    return st;
                 }
             }
         }
-        mp4_track_deinit(&track);
-        if (st != AVP_OK && st != AVP_ENOENT && st != AVP_EUNSUPPORTED) {
-            return st;
-        }
 
-        stream_index++;
+        current = (uint64_t)box.start + box.size;
     }
 
-    demuxer->stream_count = stream_index;
-    return stream_index != 0u ? AVP_OK : AVP_EUNSUPPORTED;
+    return current == end ? AVP_OK : AVP_EBADHEADER;
 }
 
 avp_status_t mp4_demux_open(mp4_demux_t *demuxer, avp_io_t *avp_io)
 {
-    uint8_t *moov_buffer = NULL;
-    uint32_t moov_size = 0u;
     int size;
+    uint32_t stream_index = 0u;
     avp_status_t st;
 
     if (demuxer == NULL || avp_io == NULL) {
@@ -1657,17 +1715,16 @@ avp_status_t mp4_demux_open(mp4_demux_t *demuxer, avp_io_t *avp_io)
     memset(demuxer, 0, sizeof(*demuxer));
     demuxer->common.avp_io = avp_io;
     demuxer->common.file_size = (uint32_t)size;
-    st = mp4_read_moov(demuxer, &moov_buffer, &moov_size);
+    st = mp4_parse_file_boxes(demuxer,
+                              0u,
+                              demuxer->common.file_size,
+                              NULL,
+                              &stream_index,
+                              0);
     if (st != AVP_OK) {
         goto fail;
     }
-    st = mp4_parse_moov(moov_buffer, moov_size, demuxer);
-    if (st != AVP_OK) {
-        goto fail;
-    }
-    if (moov_buffer != NULL) {
-        avp_free(moov_buffer);
-    }
+    demuxer->stream_count = stream_index;
     if (demuxer->has_video == 0u && demuxer->has_audio == 0u) {
         st = AVP_EUNSUPPORTED;
         goto fail;

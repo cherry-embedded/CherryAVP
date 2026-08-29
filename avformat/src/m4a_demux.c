@@ -348,149 +348,98 @@ static avp_status_t m4a_parse_audio_specific_config(const uint8_t *buffer,
     return AVP_OK;
 }
 
-static avp_status_t m4a_next_box(const uint8_t *buffer,
-                                 uint32_t buffer_size,
-                                 uint32_t parent_start,
-                                 uint32_t parent_size,
-                                 uint32_t *pos,
-                                 m4a_box_t *box)
+#define M4A_READ_MEMORY_BOX(_buffer, _buffer_size, _current, _end, _box, _status) \
+    do {                                                                          \
+        const uint8_t *m4a_mem_buffer = (_buffer);                                \
+        uint32_t m4a_mem_buffer_size = (_buffer_size);                            \
+        uint32_t m4a_current = (_current);                                        \
+        uint32_t m4a_end = (_end);                                                \
+        m4a_box_t *m4a_box = (_box);                                              \
+        uint64_t m4a_size;                                                        \
+        uint32_t m4a_header_size = 8u;                                            \
+                                                                                  \
+        if (m4a_mem_buffer == NULL || m4a_box == NULL ||                          \
+            m4a_current > m4a_end || m4a_end > m4a_mem_buffer_size) {             \
+            (_status) = AVP_EINVAL;                                               \
+        } else if (m4a_end - m4a_current < 8u) {                                  \
+            (_status) = AVP_EBADHEADER;                                           \
+        } else {                                                                  \
+            m4a_size = AVP_GET_BE32(m4a_mem_buffer + m4a_current);                \
+            memset(m4a_box, 0, sizeof(*m4a_box));                                 \
+            m4a_box->start = m4a_current;                                         \
+            m4a_box->type = M4A_BOX_TYPE(m4a_mem_buffer[m4a_current + 4u],        \
+                                         m4a_mem_buffer[m4a_current + 5u],        \
+                                         m4a_mem_buffer[m4a_current + 6u],        \
+                                         m4a_mem_buffer[m4a_current + 7u]);       \
+            if (m4a_size == 1u) {                                                 \
+                if (m4a_end - m4a_current < 16u) {                                \
+                    (_status) = AVP_EBADHEADER;                                   \
+                    break;                                                        \
+                }                                                                 \
+                m4a_size = AVP_GET_BE64(m4a_mem_buffer + m4a_current + 8u);       \
+                m4a_header_size = 16u;                                            \
+            } else if (m4a_size == 0u) {                                          \
+                m4a_size = m4a_end - m4a_current;                                 \
+            }                                                                     \
+            if (m4a_size < m4a_header_size || m4a_size > m4a_end - m4a_current || \
+                m4a_size > UINT32_MAX) {                                          \
+                (_status) = AVP_EBADHEADER;                                       \
+            } else {                                                              \
+                m4a_box->size = (uint32_t)m4a_size;                               \
+                m4a_box->header_size = m4a_header_size;                           \
+                (_status) = AVP_OK;                                               \
+            }                                                                     \
+        }                                                                         \
+    } while (0)
+
+static avp_status_t m4a_parse_box_header(m4a_demux_t *demuxer,
+                                         uint32_t current,
+                                         uint32_t end,
+                                         m4a_box_t *box)
 {
-    uint32_t parent_end;
-    uint32_t size;
+    uint8_t header[16];
+    uint64_t box_size;
     uint32_t header_size = 8u;
-
-    if (buffer == NULL || pos == NULL || box == NULL ||
-        parent_start > buffer_size ||
-        parent_size > buffer_size - parent_start) {
-        return AVP_EINVAL;
-    }
-
-    parent_end = parent_start + parent_size;
-    if (*pos >= parent_end) {
-        return AVP_ENOENT;
-    }
-    if (parent_end - *pos < 8u) {
-        return AVP_EBADHEADER;
-    }
-
-    size = AVP_GET_BE32(buffer + *pos);
-    memset(box, 0, sizeof(*box));
-    box->start = *pos;
-    box->type = AUDIO_CODEC_FOURCC(buffer[*pos + 4u],
-                                   buffer[*pos + 5u],
-                                   buffer[*pos + 6u],
-                                   buffer[*pos + 7u]);
-
-    if (size == 1u) {
-        if (parent_end - *pos < 16u) {
-            return AVP_EBADHEADER;
-        }
-        size = AVP_GET_BE64(buffer + *pos + 8u);
-        header_size = 16u;
-    } else if (size == 0u) {
-        size = parent_end - *pos;
-    }
-
-    if (size < header_size || size > parent_end - *pos) {
-        return AVP_EBADHEADER;
-    }
-
-    box->size = size;
-    box->header_size = header_size;
-    *pos += size;
-    return AVP_OK;
-}
-
-static avp_status_t m4a_find_child(const uint8_t *buffer,
-                                   uint32_t buffer_size,
-                                   uint32_t parent_start,
-                                   uint32_t parent_size,
-                                   uint32_t type,
-                                   m4a_box_t *out)
-{
-    uint32_t pos = parent_start;
     avp_status_t st;
 
-    for (;;) {
-        m4a_box_t box;
+    if (demuxer == NULL || demuxer->common.avp_io == NULL ||
+        box == NULL || current > end || end > demuxer->common.file_size) {
+        return AVP_EINVAL;
+    }
+    if (end - current < 8u) {
+        return AVP_EBADHEADER;
+    }
 
-        st = m4a_next_box(buffer, buffer_size, parent_start, parent_size, &pos, &box);
-        if (st == AVP_ENOENT) {
-            return AVP_ENOENT;
+    st = avp_io_read_at(demuxer->common.avp_io, current, header, 8u);
+    if (st != AVP_OK) {
+        return st;
+    }
+
+    box_size = AVP_GET_BE32(header);
+    memset(box, 0, sizeof(*box));
+    box->start = current;
+    box->type = M4A_BOX_TYPE(header[4], header[5], header[6], header[7]);
+    if (box_size == 1u) {
+        if (end - current < 16u) {
+            return AVP_EBADHEADER;
         }
+        st = avp_io_read_at(demuxer->common.avp_io, current + 8u, header + 8u, 8u);
         if (st != AVP_OK) {
             return st;
         }
-        if (box.type == type) {
-            *out = box;
-            return AVP_OK;
-        }
-    }
-}
-
-static avp_status_t m4a_find_moov_in_probe(const uint8_t *buffer,
-                                           uint32_t size,
-                                           m4a_box_t *moov)
-{
-    uint32_t pos;
-    m4a_box_t trak;
-
-    if (buffer == NULL || moov == NULL || size < 8u) {
-        return AVP_EINVAL;
+        box_size = AVP_GET_BE64(header + 8u);
+        header_size = 16u;
+    } else if (box_size == 0u) {
+        box_size = end - current;
     }
 
-    /*
-     * The probe buffer may be either the file head or the file tail. When it is
-     * the tail, it can start in the middle of mdat, so scan for a complete moov
-     * box instead of requiring top-level parsing from offset zero.
-     */
-    for (pos = 0u; pos + 8u <= size; pos++) {
-        uint32_t box_size;
-        uint32_t header_size = 8u;
-
-        if (AUDIO_CODEC_FOURCC(buffer[pos + 4u],
-                               buffer[pos + 5u],
-                               buffer[pos + 6u],
-                               buffer[pos + 7u]) != M4A_BOX_TYPE('m', 'o', 'o', 'v')) {
-            continue;
-        }
-
-        box_size = AVP_GET_BE32(buffer + pos);
-        if (box_size == 1u) {
-            if (pos + 16u > size) {
-                continue;
-            }
-            box_size = AVP_GET_BE64(buffer + pos + 8u);
-            header_size = 16u;
-        } else if (box_size == 0u) {
-            box_size = (uint32_t)size - pos;
-        }
-
-        if (box_size < header_size) {
-            continue;
-        }
-        if (box_size > (uint32_t)size - pos) {
-            continue;
-        }
-
-        if (m4a_find_child(buffer,
-                           size,
-                           pos + header_size,
-                           box_size - header_size,
-                           M4A_BOX_TYPE('t', 'r', 'a', 'k'),
-                           &trak) != AVP_OK) {
-            continue;
-        }
-
-        memset(moov, 0, sizeof(*moov));
-        moov->start = pos;
-        moov->size = box_size;
-        moov->header_size = header_size;
-        moov->type = M4A_BOX_TYPE('m', 'o', 'o', 'v');
-        return AVP_OK;
+    if (box_size < header_size || box_size > end - current || box_size > UINT32_MAX) {
+        return AVP_EBADHEADER;
     }
 
-    return AVP_ELACKFRAME;
+    box->size = (uint32_t)box_size;
+    box->header_size = header_size;
+    return AVP_OK;
 }
 
 static avp_status_t m4a_read_descriptor_length(const uint8_t *buffer,
@@ -595,8 +544,7 @@ static avp_status_t m4a_find_decoder_specific(const uint8_t *buffer,
 }
 
 static avp_status_t m4a_parse_esds(const uint8_t *buffer,
-                                   uint32_t payload_start,
-                                   uint32_t payload_size,
+                                   uint32_t buffer_size,
                                    m4a_demux_t *m4a,
                                    m4a_track_t *track)
 {
@@ -606,12 +554,12 @@ static avp_status_t m4a_parse_esds(const uint8_t *buffer,
     avp_status_t st;
 
     if (buffer == NULL || m4a == NULL || track == NULL ||
-        payload_size < 4u || payload_size > UINT32_MAX) {
+        buffer_size < 4u) {
         return AVP_EBADHEADER;
     }
 
-    st = m4a_find_decoder_specific(buffer + payload_start + 4u,
-                                   (uint32_t)payload_size - 4u,
+    st = m4a_find_decoder_specific(buffer + 4u,
+                                   buffer_size - 4u,
                                    &object_type,
                                    &asc,
                                    &asc_size);
@@ -641,12 +589,15 @@ static avp_status_t m4a_parse_mp4a(const uint8_t *buffer,
                                    m4a_demux_t *m4a,
                                    m4a_track_t *track)
 {
-    uint32_t payload_start = entry_start + 8u;
+    uint32_t payload = entry_start + 8u;
     uint32_t child_start;
     uint32_t child_size;
     uint16_t version;
     avp_status_t st;
     m4a_box_t esds;
+    uint64_t current;
+    uint64_t end;
+    int found_esds = 0;
 
     if (buffer == NULL || m4a == NULL || track == NULL ||
         entry_size < 36u ||
@@ -655,8 +606,8 @@ static avp_status_t m4a_parse_mp4a(const uint8_t *buffer,
         return AVP_EBADHEADER;
     }
 
-    version = AVP_GET_BE16(buffer + payload_start + 8u);
-    child_start = payload_start + 28u;
+    version = AVP_GET_BE16(buffer + payload + 8u);
+    child_start = payload + 28u;
     if (version == 1u) {
         child_start += 16u;
     } else if (version == 2u) {
@@ -667,18 +618,39 @@ static avp_status_t m4a_parse_mp4a(const uint8_t *buffer,
     }
     child_size = entry_start + entry_size - child_start;
 
-    st = m4a_find_child(buffer,
-                        buffer_size,
-                        child_start,
-                        child_size,
-                        M4A_BOX_TYPE('e', 's', 'd', 's'),
-                        &esds);
-    if (st != AVP_OK) {
-        return st;
+    current = child_start;
+    end = (uint64_t)child_start + child_size;
+    while (current + 8u <= end) {
+        M4A_READ_MEMORY_BOX(buffer,
+                            buffer_size,
+                            (uint32_t)current,
+                            (uint32_t)end,
+                            &esds,
+                            st);
+        if (st != AVP_OK) {
+            return st;
+        }
+
+        switch (esds.type) {
+            case M4A_BOX_TYPE('e', 's', 'd', 's'):
+                found_esds = 1;
+                break;
+            default:
+                break;
+        }
+        if (found_esds != 0) {
+            break;
+        }
+        current = (uint64_t)esds.start + esds.size;
+    }
+    if (current != end && found_esds == 0) {
+        return AVP_EBADHEADER;
+    }
+    if (found_esds == 0) {
+        return AVP_ENOENT;
     }
 
-    st = m4a_parse_esds(buffer,
-                        esds.start + esds.header_size,
+    st = m4a_parse_esds(buffer + esds.start + esds.header_size,
                         esds.size - esds.header_size,
                         m4a,
                         track);
@@ -702,6 +674,9 @@ static avp_status_t m4a_parse_alac(const uint8_t *buffer,
     uint32_t child_size;
     uint32_t cookie_size;
     avp_status_t st;
+    uint64_t current;
+    uint64_t end;
+    int found_alac = 0;
 
     if (buffer == NULL || m4a == NULL || track == NULL ||
         entry_size < 36u ||
@@ -712,14 +687,39 @@ static avp_status_t m4a_parse_alac(const uint8_t *buffer,
 
     child_start = entry_start + 36u;
     child_size = entry_size - 36u;
-    st = m4a_find_child(buffer,
-                        buffer_size,
-                        child_start,
-                        child_size,
-                        M4A_BOX_TYPE('a', 'l', 'a', 'c'),
-                        &atom);
-    if (st != AVP_OK || atom.size < atom.header_size + 4u + sizeof(ALACSpecificConfig)) {
-        return st == AVP_ENOENT ? AVP_EUNSUPPORTED : st;
+    current = child_start;
+    end = (uint64_t)child_start + child_size;
+    while (current + 8u <= end) {
+        M4A_READ_MEMORY_BOX(buffer,
+                            buffer_size,
+                            (uint32_t)current,
+                            (uint32_t)end,
+                            &atom,
+                            st);
+        if (st != AVP_OK) {
+            return st;
+        }
+
+        switch (atom.type) {
+            case M4A_BOX_TYPE('a', 'l', 'a', 'c'):
+                found_alac = 1;
+                break;
+            default:
+                break;
+        }
+        if (found_alac != 0) {
+            break;
+        }
+        current = (uint64_t)atom.start + atom.size;
+    }
+    if (current != end && found_alac == 0) {
+        return AVP_EBADHEADER;
+    }
+    if (found_alac == 0) {
+        return AVP_EUNSUPPORTED;
+    }
+    if (atom.size < atom.header_size + 4u + sizeof(ALACSpecificConfig)) {
+        return AVP_EBADHEADER;
     }
 
     cookie_size = atom.size - atom.header_size - 4u;
@@ -741,8 +741,6 @@ static avp_status_t m4a_parse_alac(const uint8_t *buffer,
 
 static avp_status_t m4a_parse_stsd(const uint8_t *buffer,
                                    uint32_t buffer_size,
-                                   uint32_t payload_start,
-                                   uint32_t payload_size,
                                    m4a_demux_t *m4a,
                                    m4a_track_t *track)
 {
@@ -751,15 +749,13 @@ static avp_status_t m4a_parse_stsd(const uint8_t *buffer,
     uint32_t entry_count;
     uint32_t i;
 
-    if (buffer == NULL || m4a == NULL || track == NULL || payload_size < 8u ||
-        payload_start > buffer_size ||
-        payload_size > buffer_size - payload_start) {
+    if (buffer == NULL || m4a == NULL || track == NULL || buffer_size < 8u) {
         return AVP_EBADHEADER;
     }
 
-    entry_count = AVP_GET_BE32(buffer + payload_start + 4u);
-    pos = payload_start + 8u;
-    end = payload_start + payload_size;
+    entry_count = AVP_GET_BE32(buffer + 4u);
+    pos = 8u;
+    end = buffer_size;
 
     for (i = 0u; i < entry_count && pos + 8u <= end; i++) {
         uint32_t entry_size = AVP_GET_BE32(buffer + pos);
@@ -786,8 +782,7 @@ static avp_status_t m4a_parse_stsd(const uint8_t *buffer,
 }
 
 static avp_status_t m4a_parse_stsz(const uint8_t *buffer,
-                                   uint32_t payload_start,
-                                   uint32_t payload_size,
+                                   uint32_t buffer_size,
                                    m4a_demux_t *m4a,
                                    m4a_track_t *track)
 {
@@ -795,19 +790,18 @@ static avp_status_t m4a_parse_stsz(const uint8_t *buffer,
     uint32_t sample_count;
     uint32_t i;
 
-    if (buffer == NULL || m4a == NULL || track == NULL || payload_size < 12u ||
-        payload_size > UINT32_MAX) {
+    if (buffer == NULL || m4a == NULL || track == NULL || buffer_size < 12u) {
         return AVP_EBADHEADER;
     }
 
-    default_size = AVP_GET_BE32(buffer + payload_start + 4u);
-    sample_count = AVP_GET_BE32(buffer + payload_start + 8u);
+    default_size = AVP_GET_BE32(buffer + 4u);
+    sample_count = AVP_GET_BE32(buffer + 8u);
     if (sample_count == 0u ||
         sample_count > UINT32_MAX / (uint32_t)sizeof(uint32_t)) {
         return AVP_EBADHEADER;
     }
     if (default_size == 0u &&
-        payload_size < 12u + (uint32_t)sample_count * 4u) {
+        buffer_size < 12u + (uint32_t)sample_count * 4u) {
         return AVP_EBADHEADER;
     }
 
@@ -824,7 +818,7 @@ static avp_status_t m4a_parse_stsz(const uint8_t *buffer,
     for (i = 0u; i < sample_count; i++) {
         uint32_t sample_size = default_size != 0u ?
                                    default_size :
-                                   AVP_GET_BE32(buffer + payload_start + 12u + (uint32_t)i * 4u);
+                                   AVP_GET_BE32(buffer + 12u + (uint32_t)i * 4u);
 
         if (sample_size == 0u) {
             return AVP_EBADHEADER;
@@ -839,22 +833,20 @@ static avp_status_t m4a_parse_stsz(const uint8_t *buffer,
 }
 
 static avp_status_t m4a_parse_stsc(const uint8_t *buffer,
-                                   uint32_t payload_start,
-                                   uint32_t payload_size,
+                                   uint32_t buffer_size,
                                    m4a_track_t *track)
 {
     uint32_t entry_count;
     uint32_t i;
 
-    if (buffer == NULL || track == NULL || payload_size < 8u ||
-        payload_size > UINT32_MAX) {
+    if (buffer == NULL || track == NULL || buffer_size < 8u) {
         return AVP_EBADHEADER;
     }
 
-    entry_count = AVP_GET_BE32(buffer + payload_start + 4u);
+    entry_count = AVP_GET_BE32(buffer + 4u);
     if (entry_count == 0u ||
         entry_count > UINT32_MAX / (uint32_t)sizeof(m4a_stsc_entry_t) ||
-        payload_size < 8u + (uint32_t)entry_count * 12u) {
+        buffer_size < 8u + (uint32_t)entry_count * 12u) {
         return AVP_EBADHEADER;
     }
     if (track->stsc != NULL) {
@@ -867,7 +859,7 @@ static avp_status_t m4a_parse_stsc(const uint8_t *buffer,
     }
     track->stsc_count = entry_count;
     for (i = 0u; i < entry_count; i++) {
-        const uint8_t *entry = buffer + payload_start + 8u + (uint32_t)i * 12u;
+        const uint8_t *entry = buffer + 8u + (uint32_t)i * 12u;
 
         track->stsc[i].first_chunk = AVP_GET_BE32(entry);
         track->stsc[i].samples_per_chunk = AVP_GET_BE32(entry + 4u);
@@ -884,8 +876,7 @@ static avp_status_t m4a_parse_stsc(const uint8_t *buffer,
 }
 
 static avp_status_t m4a_parse_stco(const uint8_t *buffer,
-                                   uint32_t payload_start,
-                                   uint32_t payload_size,
+                                   uint32_t buffer_size,
                                    uint8_t co64,
                                    m4a_track_t *track)
 {
@@ -893,15 +884,14 @@ static avp_status_t m4a_parse_stco(const uint8_t *buffer,
     uint32_t field_size = co64 ? 8u : 4u;
     uint32_t i;
 
-    if (buffer == NULL || track == NULL || payload_size < 8u ||
-        payload_size > UINT32_MAX) {
+    if (buffer == NULL || track == NULL || buffer_size < 8u) {
         return AVP_EBADHEADER;
     }
 
-    entry_count = AVP_GET_BE32(buffer + payload_start + 4u);
+    entry_count = AVP_GET_BE32(buffer + 4u);
     if (entry_count == 0u ||
         entry_count > UINT32_MAX / (uint32_t)sizeof(uint32_t) ||
-        payload_size < 8u + (uint32_t)entry_count * field_size) {
+        buffer_size < 8u + (uint32_t)entry_count * field_size) {
         return AVP_EBADHEADER;
     }
     if (track->chunk_offsets != NULL) {
@@ -914,144 +904,12 @@ static avp_status_t m4a_parse_stco(const uint8_t *buffer,
     }
     track->chunk_count = entry_count;
     for (i = 0u; i < entry_count; i++) {
-        const uint8_t *entry = buffer + payload_start + 8u + (uint32_t)i * field_size;
+        const uint8_t *entry = buffer + 8u + (uint32_t)i * field_size;
 
         track->chunk_offsets[i] = co64 ? AVP_GET_BE64(entry) : (uint32_t)AVP_GET_BE32(entry);
     }
 
     return AVP_OK;
-}
-
-static avp_status_t m4a_parse_stbl(const uint8_t *buffer,
-                                   uint32_t buffer_size,
-                                   uint32_t payload_start,
-                                   uint32_t payload_size,
-                                   m4a_demux_t *m4a,
-                                   m4a_track_t *track)
-{
-    uint32_t pos = payload_start;
-    avp_status_t st;
-
-    for (;;) {
-        m4a_box_t box;
-        uint32_t box_payload = 0u;
-        uint32_t box_payload_size = 0u;
-
-        st = m4a_next_box(buffer, buffer_size, payload_start, payload_size, &pos, &box);
-        if (st == AVP_ENOENT) {
-            break;
-        }
-        if (st != AVP_OK) {
-            return st;
-        }
-
-        box_payload = box.start + box.header_size;
-        box_payload_size = box.size - box.header_size;
-
-        if (box.type == M4A_BOX_TYPE('s', 't', 's', 'd')) {
-            st = m4a_parse_stsd(buffer, buffer_size, box_payload, box_payload_size, m4a, track);
-        } else if (box.type == M4A_BOX_TYPE('s', 't', 's', 'z')) {
-            st = m4a_parse_stsz(buffer, box_payload, box_payload_size, m4a, track);
-        } else if (box.type == M4A_BOX_TYPE('s', 't', 's', 'c')) {
-            st = m4a_parse_stsc(buffer, box_payload, box_payload_size, track);
-        } else if (box.type == M4A_BOX_TYPE('s', 't', 'c', 'o')) {
-            st = m4a_parse_stco(buffer, box_payload, box_payload_size, 0u, track);
-        } else if (box.type == M4A_BOX_TYPE('c', 'o', '6', '4')) {
-            st = m4a_parse_stco(buffer, box_payload, box_payload_size, 1u, track);
-        } else {
-            st = AVP_OK;
-        }
-
-        if (st != AVP_OK && st != AVP_ENOENT) {
-            return st;
-        }
-    }
-
-    return AVP_OK;
-}
-
-static avp_status_t m4a_parse_trak(const uint8_t *buffer,
-                                   uint32_t buffer_size,
-                                   uint32_t payload_start,
-                                   uint32_t payload_size,
-                                   m4a_demux_t *m4a,
-                                   m4a_track_t *track)
-{
-    m4a_box_t mdia;
-    m4a_box_t hdlr;
-    m4a_box_t minf;
-    m4a_box_t stbl;
-    uint32_t mdia_payload;
-    uint32_t mdia_payload_size;
-    uint32_t hdlr_payload;
-    uint32_t minf_payload;
-    uint32_t stbl_payload;
-    avp_status_t st;
-
-    st = m4a_find_child(buffer,
-                        buffer_size,
-                        payload_start,
-                        payload_size,
-                        M4A_BOX_TYPE('m', 'd', 'i', 'a'),
-                        &mdia);
-    if (st != AVP_OK) {
-        return st;
-    }
-    mdia_payload = mdia.start + mdia.header_size;
-    mdia_payload_size = mdia.size - mdia.header_size;
-
-    st = m4a_find_child(buffer,
-                        buffer_size,
-                        mdia_payload,
-                        mdia_payload_size,
-                        M4A_BOX_TYPE('h', 'd', 'l', 'r'),
-                        &hdlr);
-    if (st != AVP_OK) {
-        return st;
-    }
-    hdlr_payload = hdlr.start + hdlr.header_size;
-    if (hdlr.size - hdlr.header_size < 12u) {
-        return AVP_EBADHEADER;
-    }
-    track->is_audio = AUDIO_CODEC_FOURCC(buffer[hdlr_payload + 8u],
-                                         buffer[hdlr_payload + 9u],
-                                         buffer[hdlr_payload + 10u],
-                                         buffer[hdlr_payload + 11u]) ==
-                              M4A_BOX_TYPE('s', 'o', 'u', 'n') ?
-                          1u :
-                          0u;
-    if (!track->is_audio) {
-        return AVP_EUNSUPPORTED;
-    }
-
-    st = m4a_find_child(buffer,
-                        buffer_size,
-                        mdia_payload,
-                        mdia_payload_size,
-                        M4A_BOX_TYPE('m', 'i', 'n', 'f'),
-                        &minf);
-    if (st != AVP_OK) {
-        return st;
-    }
-    minf_payload = minf.start + minf.header_size;
-
-    st = m4a_find_child(buffer,
-                        buffer_size,
-                        minf_payload,
-                        minf.size - minf.header_size,
-                        M4A_BOX_TYPE('s', 't', 'b', 'l'),
-                        &stbl);
-    if (st != AVP_OK) {
-        return st;
-    }
-    stbl_payload = stbl.start + stbl.header_size;
-
-    return m4a_parse_stbl(buffer,
-                          buffer_size,
-                          stbl_payload,
-                          stbl.size - stbl.header_size,
-                          m4a,
-                          track);
 }
 
 static avp_status_t m4a_build_header_from_track(const m4a_track_t *track,
@@ -1061,7 +919,7 @@ static avp_status_t m4a_build_header_from_track(const m4a_track_t *track,
     uint32_t i;
     uint32_t first_offset;
     uint32_t last_end;
-    uint32_t packet_index = 0;
+    uint32_t packet_index = 0u;
 
     if (track == NULL || demuxer == NULL ||
         !track->is_audio || !track->has_mp4a || !track->has_esds ||
@@ -1134,150 +992,234 @@ static avp_status_t m4a_build_header_from_track(const m4a_track_t *track,
     return AVP_OK;
 }
 
-static avp_status_t m4a_parse_moov_header(const uint8_t *buffer,
-                                          uint32_t size,
-                                          m4a_demux_t *demuxer)
+static int m4a_is_nested_box(uint32_t type)
 {
-    m4a_box_t moov;
-    uint32_t moov_payload;
-    uint32_t moov_payload_size;
-    uint32_t pos;
-    avp_status_t st;
-
-    if (buffer == NULL || size < 8u || demuxer == NULL ||
-        demuxer->common.file_size == 0u || size > demuxer->common.file_size) {
-        return AVP_EINVAL;
+    switch (type) {
+        case M4A_BOX_TYPE('m', 'o', 'o', 'v'):
+        case M4A_BOX_TYPE('t', 'r', 'a', 'k'):
+        case M4A_BOX_TYPE('m', 'd', 'i', 'a'):
+        case M4A_BOX_TYPE('m', 'i', 'n', 'f'):
+        case M4A_BOX_TYPE('s', 't', 'b', 'l'):
+        case M4A_BOX_TYPE('e', 'd', 't', 's'):
+        case M4A_BOX_TYPE('d', 'i', 'n', 'f'):
+        case M4A_BOX_TYPE('u', 'd', 't', 'a'):
+        case M4A_BOX_TYPE('m', 'v', 'e', 'x'):
+        case M4A_BOX_TYPE('m', 'o', 'o', 'f'):
+        case M4A_BOX_TYPE('t', 'r', 'a', 'f'):
+        case M4A_BOX_TYPE('m', 'f', 'r', 'a'):
+        case M4A_BOX_TYPE('w', 'a', 'v', 'e'):
+            return 1;
+        default:
+            return 0;
     }
-
-    st = m4a_find_moov_in_probe(buffer, size, &moov);
-    if (st != AVP_OK) {
-        return st;
-    }
-
-    moov_payload = moov.start + moov.header_size;
-    moov_payload_size = moov.size - moov.header_size;
-    pos = moov_payload;
-
-    for (;;) {
-        m4a_box_t trak;
-        m4a_track_t track;
-
-        st = m4a_next_box(buffer, size, moov_payload, moov_payload_size, &pos, &trak);
-        if (st == AVP_ENOENT) {
-            break;
-        }
-        if (st != AVP_OK) {
-            return st;
-        }
-        if (trak.type != M4A_BOX_TYPE('t', 'r', 'a', 'k')) {
-            continue;
-        }
-
-        memset(&track, 0, sizeof(track));
-        st = m4a_parse_trak(buffer,
-                            size,
-                            trak.start + trak.header_size,
-                            trak.size - trak.header_size,
-                            demuxer,
-                            &track);
-        if (st == AVP_EUNSUPPORTED) {
-            m4a_track_deinit(&track);
-            continue;
-        }
-        if (st != AVP_OK) {
-            m4a_track_deinit(&track);
-            return st;
-        }
-
-        st = m4a_build_header_from_track(&track, demuxer);
-        if (st != AVP_OK) {
-            m4a_track_deinit(&track);
-            return st;
-        }
-
-        m4a_track_deinit(&track);
-
-        return AVP_OK;
-    }
-
-    return AVP_EUNSUPPORTED;
 }
 
-static avp_status_t m4a_read_moov(m4a_demux_t *demuxer,
-                                  uint8_t **moov_buffer,
-                                  uint32_t *moov_size)
+static avp_status_t m4a_parse_file_boxes(m4a_demux_t *demuxer,
+                                         uint32_t start,
+                                         uint32_t end,
+                                         m4a_track_t *track,
+                                         uint32_t depth)
 {
-    uint32_t offset = 0u;
+    uint64_t current = start;
 
     if (demuxer == NULL || demuxer->common.avp_io == NULL ||
-        moov_buffer == NULL || moov_size == NULL) {
+        start > end || end > demuxer->common.file_size) {
         return AVP_EINVAL;
     }
 
-    *moov_buffer = NULL;
-    *moov_size = 0u;
-
-    while (offset + 8u <= demuxer->common.file_size) {
-        uint8_t header[16];
-        uint64_t box_size;
-        uint32_t header_size = 8u;
-        uint32_t type;
+    while (current + 8u <= end) {
+        m4a_box_t box;
+        uint32_t box_payload;
+        uint32_t box_data_size;
         avp_status_t st;
+        int parse_children;
 
-        st = avp_io_read_at(demuxer->common.avp_io, offset, header, 8u);
+        st = m4a_parse_box_header(demuxer, (uint32_t)current, end, &box);
         if (st != AVP_OK) {
             return st;
         }
 
-        box_size = AVP_GET_BE32(header);
-        type = M4A_BOX_TYPE(header[4], header[5], header[6], header[7]);
-        if (box_size == 1u) {
-            if (offset + 16u > demuxer->common.file_size) {
-                return AVP_EBADHEADER;
-            }
-            st = avp_io_read_at(demuxer->common.avp_io, offset + 8u, header + 8u, 8u);
+        box_payload = box.start + box.header_size;
+        box_data_size = box.size - box.header_size;
+        parse_children = m4a_is_nested_box(box.type) != 0 && box.size > box.header_size;
+
+        // char box_str[5] = { 0 };
+        // avp_fourcc_to_string(box.type, box_str);
+        // printf("%*s[%s], offset %u, size %u\n",
+        //        depth * 2,
+        //        "",
+        //        box_str,
+        //        box.start,
+        //        box.size);
+
+        switch (box.type) {
+            case M4A_BOX_TYPE('h', 'd', 'l', 'r'):
+                if (track != NULL) {
+                    uint8_t handler_buffer[12];
+
+                    if (box_data_size < sizeof(handler_buffer)) {
+                        return AVP_EBADHEADER;
+                    }
+                    st = avp_io_read_at(demuxer->common.avp_io,
+                                        box_payload,
+                                        handler_buffer,
+                                        sizeof(handler_buffer));
+                    if (st != AVP_OK) {
+                        return st;
+                    }
+                    track->is_audio = M4A_BOX_TYPE(handler_buffer[8],
+                                                   handler_buffer[9],
+                                                   handler_buffer[10],
+                                                   handler_buffer[11]) ==
+                                              M4A_BOX_TYPE('s', 'o', 'u', 'n') ?
+                                          1u :
+                                          0u;
+                }
+                break;
+            case M4A_BOX_TYPE('s', 't', 's', 'd'):
+                if (track != NULL && track->is_audio != 0u) {
+                    uint8_t *box_buffer = (uint8_t *)avp_malloc((size_t)box.size);
+
+                    if (box_buffer == NULL) {
+                        return AVP_ENOMEM;
+                    }
+                    st = avp_io_read_at(demuxer->common.avp_io,
+                                        box.start,
+                                        box_buffer,
+                                        box.size);
+                    if (st == AVP_OK) {
+                        st = m4a_parse_stsd(box_buffer + box.header_size,
+                                            box.size - box.header_size,
+                                            demuxer,
+                                            track);
+                    }
+                    avp_free(box_buffer);
+                    if (st != AVP_OK && st != AVP_ENOENT) {
+                        return st;
+                    }
+                }
+                break;
+            case M4A_BOX_TYPE('s', 't', 's', 'z'):
+                if (track != NULL && track->is_audio != 0u) {
+                    uint8_t *box_buffer = (uint8_t *)avp_malloc((size_t)box.size);
+
+                    if (box_buffer == NULL) {
+                        return AVP_ENOMEM;
+                    }
+                    st = avp_io_read_at(demuxer->common.avp_io,
+                                        box.start,
+                                        box_buffer,
+                                        box.size);
+                    if (st == AVP_OK) {
+                        st = m4a_parse_stsz(box_buffer + box.header_size,
+                                            box.size - box.header_size,
+                                            demuxer,
+                                            track);
+                    }
+                    avp_free(box_buffer);
+                    if (st != AVP_OK) {
+                        return st;
+                    }
+                }
+                break;
+            case M4A_BOX_TYPE('s', 't', 's', 'c'):
+                if (track != NULL && track->is_audio != 0u) {
+                    uint8_t *box_buffer = (uint8_t *)avp_malloc((size_t)box.size);
+
+                    if (box_buffer == NULL) {
+                        return AVP_ENOMEM;
+                    }
+                    st = avp_io_read_at(demuxer->common.avp_io,
+                                        box.start,
+                                        box_buffer,
+                                        box.size);
+                    if (st == AVP_OK) {
+                        st = m4a_parse_stsc(box_buffer + box.header_size,
+                                            box.size - box.header_size,
+                                            track);
+                    }
+                    avp_free(box_buffer);
+                    if (st != AVP_OK) {
+                        return st;
+                    }
+                }
+                break;
+            case M4A_BOX_TYPE('s', 't', 'c', 'o'):
+                if (track != NULL && track->is_audio != 0u) {
+                    uint8_t *box_buffer = (uint8_t *)avp_malloc((size_t)box.size);
+
+                    if (box_buffer == NULL) {
+                        return AVP_ENOMEM;
+                    }
+                    st = avp_io_read_at(demuxer->common.avp_io,
+                                        box.start,
+                                        box_buffer,
+                                        box.size);
+                    if (st == AVP_OK) {
+                        st = m4a_parse_stco(box_buffer + box.header_size,
+                                            box.size - box.header_size,
+                                            0u,
+                                            track);
+                    }
+                    avp_free(box_buffer);
+                    if (st != AVP_OK) {
+                        return st;
+                    }
+                }
+                break;
+            case M4A_BOX_TYPE('c', 'o', '6', '4'):
+                if (track != NULL && track->is_audio != 0u) {
+                    uint8_t *box_buffer = (uint8_t *)avp_malloc((size_t)box.size);
+
+                    if (box_buffer == NULL) {
+                        return AVP_ENOMEM;
+                    }
+                    st = avp_io_read_at(demuxer->common.avp_io,
+                                        box.start,
+                                        box_buffer,
+                                        box.size);
+                    if (st == AVP_OK) {
+                        st = m4a_parse_stco(box_buffer + box.header_size,
+                                            box.size - box.header_size,
+                                            1u,
+                                            track);
+                    }
+                    avp_free(box_buffer);
+                    if (st != AVP_OK) {
+                        return st;
+                    }
+                }
+                break;
+            default:
+                break;
+        }
+
+        if (parse_children) {
+            st = m4a_parse_file_boxes(demuxer,
+                                      box_payload,
+                                      box.start + box.size,
+                                      track,
+                                      depth + 1);
             if (st != AVP_OK) {
                 return st;
             }
-            box_size = AVP_GET_BE64(header + 8u);
-            header_size = 16u;
-        } else if (box_size == 0u) {
-            box_size = demuxer->common.file_size - offset;
-        }
-
-        if (box_size < header_size ||
-            box_size > demuxer->common.file_size - offset ||
-            box_size > UINT32_MAX) {
-            return AVP_EBADHEADER;
-        }
-
-        if (type == M4A_BOX_TYPE('m', 'o', 'o', 'v')) {
-            uint8_t *buffer = (uint8_t *)avp_malloc((uint32_t)box_size);
-            if (buffer == NULL) {
-                return AVP_ENOMEM;
+            if (track != NULL &&
+                box.type == M4A_BOX_TYPE('t', 'r', 'a', 'k') &&
+                track->is_audio != 0u) {
+                return AVP_OK;
             }
-
-            st = avp_io_read_at(demuxer->common.avp_io, offset, buffer, (uint32_t)box_size);
-            if (st != AVP_OK) {
-                return st;
-            }
-
-            *moov_buffer = buffer;
-            *moov_size = (uint32_t)box_size;
-            return AVP_OK;
         }
 
-        offset += (uint32_t)box_size;
+        current = (uint64_t)box.start + box.size;
     }
 
-    return AVP_ENOENT;
+    return current == end ? AVP_OK : AVP_EBADHEADER;
 }
 
 avp_status_t m4a_demux_open(m4a_demux_t *demuxer, avp_io_t *avp_io)
 {
-    uint8_t *moov_buffer = NULL;
-    uint32_t moov_size = 0u;
     int64_t size;
+    m4a_track_t track;
     avp_status_t st;
 
     if (demuxer == NULL || avp_io == NULL) {
@@ -1290,19 +1232,21 @@ avp_status_t m4a_demux_open(m4a_demux_t *demuxer, avp_io_t *avp_io)
     }
 
     memset(demuxer, 0, sizeof(*demuxer));
+    memset(&track, 0, sizeof(track));
     demuxer->common.avp_io = avp_io;
     demuxer->common.file_size = (uint32_t)size;
 
-    st = m4a_read_moov(demuxer, &moov_buffer, &moov_size);
-    if (st == AVP_OK) {
-        st = m4a_parse_moov_header(moov_buffer,
-                                   moov_size,
-                                   demuxer);
+    st = m4a_parse_file_boxes(demuxer,
+                              0u,
+                              demuxer->common.file_size,
+                              &track,
+                              0);
+    if (st != AVP_OK) {
+        goto fail;
     }
-    if (moov_buffer != NULL) {
-        avp_free(moov_buffer);
-        moov_buffer = NULL;
-    }
+
+    st = m4a_build_header_from_track(&track, demuxer);
+    m4a_track_deinit(&track);
     if (st != AVP_OK) {
         goto fail;
     }
@@ -1314,6 +1258,7 @@ avp_status_t m4a_demux_open(m4a_demux_t *demuxer, avp_io_t *avp_io)
     }
     return AVP_OK;
 fail:
+    m4a_track_deinit(&track);
     if (demuxer->sample_sizes != NULL) {
         avp_free(demuxer->sample_sizes);
     }
