@@ -80,6 +80,19 @@ run_resample_case()
         "${mode}" "${value}" "${FRAME_COUNT}"
 }
 
+run_mfcc_case()
+{
+    local name="$1"
+    local input="$2"
+    local output="${OUT_DIR}/mfcc_dump/${name}.bin"
+
+    run_case "${name}" "${output}" \
+        "${BUILD_DIR}/examples/mfcc_demo" \
+        "${input}" "${output}"
+
+    python ${ROOT_DIR}/scripts/plot_mfcc.py "${output}"
+}
+
 generate_test_files()
 {
     local input_wav="$1"
@@ -200,6 +213,31 @@ generate_test_files()
         -map "[far]" -ar 16000 -ac 1 -f s16le "${TEST_FILES_DIR}/jinitaimei_afe_3a_far.pcm" \
         -map "[near]" -ar 16000 -ac 1 -f s16le "${TEST_FILES_DIR}/jinitaimei_afe_3a_near.pcm"
 
+    note "Generating MFCC test PCM..."
+    out="${outdir}/jinitaimei_mfcc_yes_1000ms_16k.pcm"
+    ffmpeg -hide_banner -loglevel error -y \
+        -i "${EXAMPLE_FILES_DIR}/testdata/yes_1000ms.wav" \
+        -ar 16000 -ac 1 -f s16le "${out}" ||
+        note "failed: ${out}"
+
+    out="${outdir}/jinitaimei_mfcc_no_1000ms_16k.pcm"
+    ffmpeg -hide_banner -loglevel error -y \
+        -i "${EXAMPLE_FILES_DIR}/testdata/no_1000ms.wav" \
+        -ar 16000 -ac 1 -f s16le "${out}" ||
+        note "failed: ${out}"
+
+    out="${outdir}/jinitaimei_mfcc_noise_1000ms_16k.pcm"
+    ffmpeg -hide_banner -loglevel error -y \
+        -i "${EXAMPLE_FILES_DIR}/testdata/noise_1000ms.wav" \
+        -ar 16000 -ac 1 -f s16le "${out}" ||
+        note "failed: ${out}"
+
+    out="${outdir}/jinitaimei_mfcc_silence_1000ms_16k.pcm"
+    ffmpeg -hide_banner -loglevel error -y \
+        -i "${EXAMPLE_FILES_DIR}/testdata/silence_1000ms.wav" \
+        -ar 16000 -ac 1 -f s16le "${out}" ||
+        note "failed: ${out}"
+
     note "Generating howling test PCM..."
     out="${outdir}/jinitaimei_howling.pcm"
     ffmpeg -hide_banner -loglevel error -y \
@@ -229,7 +267,7 @@ generate_test_files()
         note "failed: ${out}"
 
     note "Generating limiter & compressor test PCM..."
-    out="${outdir}/jinitaimei_limter_compressor.pcm"
+    out="${outdir}/jinitaimei_limiter_compressor.pcm"
     ffmpeg -hide_banner -loglevel error -y \
         -stream_loop -1 -i "${input_wav}" \
         -f lavfi -i "sine=frequency=440:sample_rate=44100:duration=8" \
@@ -265,6 +303,14 @@ mkdir -p "${OUT_DIR}/mp4_dump"
 run_case "mp4_demo" "${OUT_DIR}/mp4_dump" \
     "${BUILD_DIR}/examples/mp4_demo" \
     "${EXAMPLE_FILES_DIR}/jinitaimei_480x272.mp4" "${OUT_DIR}/mp4_dump" "${FRAME_COUNT}"
+
+note ""
+note "MFCC demo"
+mkdir -p "${OUT_DIR}/mfcc_dump"
+run_mfcc_case "mfcc_demo_yes_1000ms_16k" "${TEST_FILES_DIR}/jinitaimei_mfcc_yes_1000ms_16k.pcm"
+run_mfcc_case "mfcc_demo_no_1000ms_16k" "${TEST_FILES_DIR}/jinitaimei_mfcc_no_1000ms_16k.pcm"
+run_mfcc_case "mfcc_demo_noise_1000ms_16k" "${TEST_FILES_DIR}/jinitaimei_mfcc_noise_1000ms_16k.pcm"
+run_mfcc_case "mfcc_demo_silence_1000ms_16k" "${TEST_FILES_DIR}/jinitaimei_mfcc_silence_1000ms_16k.pcm"
 
 note ""
 note "AFE 3A demo"
@@ -319,13 +365,13 @@ note ""
 note "AE Compressor demo"
 run_case "ae_compressor" "${OUT_DIR}/ae_compressor.pcm" \
     "${BUILD_DIR}/examples/ae_compressor_demo" \
-    "${TEST_FILES_DIR}/jinitaimei_limter_compressor.pcm" "${OUT_DIR}/ae_compressor.pcm" "${FRAME_COUNT}"
+    "${TEST_FILES_DIR}/jinitaimei_limiter_compressor.pcm" "${OUT_DIR}/ae_compressor.pcm" "${FRAME_COUNT}"
 
 note ""
 note "AE Limiter demo"
 run_case "ae_limiter" "${OUT_DIR}/ae_limiter.pcm" \
     "${BUILD_DIR}/examples/ae_limiter_demo" \
-    "${TEST_FILES_DIR}/jinitaimei_limter_compressor.pcm" "${OUT_DIR}/ae_limiter.pcm" "${FRAME_COUNT}"
+    "${TEST_FILES_DIR}/jinitaimei_limiter_compressor.pcm" "${OUT_DIR}/ae_limiter.pcm" "${FRAME_COUNT}"
 
 note ""
 note "AE EQ demo"

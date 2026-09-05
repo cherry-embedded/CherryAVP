@@ -23,6 +23,7 @@ CherryAVP is a tiny and beautiful, low-memory and high-performance audio and vid
 - Support Multiple audio front-end algorithms
 - Support Multiple audio effects algorithms
 - Support sample-rate, channel, bit-depth, data weaver conversion
+- Support MFCC (split frame -> window -> FFT -> energy -> mel filterbank -> log -> DCT)
 
 ## Encoders
 
@@ -284,3 +285,5 @@ Run with the following command to test all cases.
 | webrtc | AEC2/NS/AGC/VAD | https://webrtc.googlesource.com/src/webrtc/+/e00dfb9675737cba8fc74efde80c11043cb57089 |
 | xiph-speexdsp | AEC/NS/AGC/VAD | https://github.com/xiph/speexdsp/tree/1b28a0f61bc31162979e1f26f3981fc3637095c8 |
 | athena-signal | AEC/NS/AGC/VAD/DOA/MVDR/GSC | https://github.com/athena-team/athena-signal/tree/master/athena_signal/kernels |
+| kissfft | FFT | https://github.com/mborgerding/kissfft/commit/7bce4153c6bc8aba2db0e889e576f9d00505cbe1 |
+| sonic | sonic | https://github.com/waywardgeek/sonic |

@@ -234,6 +234,22 @@ ffprobe -hide_banner -v error \
   -of default=noprint_wrappers=1 output_file
 ```
 
+## MFCC 可视化
+
+`mfcc_demo` 输出的是 raw `float32` bin，可以直接画热力图：
+
+```bash
+python3 custom_demo/sd_fatfs/CherryAVP/examples/plot_mfcc.py \
+  custom_demo/sd_fatfs/CherryAVP/examples/files/mfcc_output.bin
+```
+
+默认会保存成同名 `.png`。如果要交互式弹窗：
+
+```bash
+python3 custom_demo/sd_fatfs/CherryAVP/examples/plot_mfcc.py \
+  input.bin --show
+```
+
 查看本机是否具备某个编码器：
 
 ```bash

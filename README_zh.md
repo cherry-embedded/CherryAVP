@@ -23,6 +23,7 @@ CherryAVP 是一个小而美，低内存，高性能的专为 MCU 设计的 Audi
 - 支持多种音频前端算法
 - 支持多种音频效果算法
 - 支持采样率转换，声道转换，位深转换，数据交织和解交织
+- 支持 MFCC (split frame -> window -> FFT -> energy -> mel filterbank -> log -> DCT)
 
 ## 编码器
 
@@ -306,3 +307,5 @@ CherryAVP 是一个小而美，低内存，高性能的专为 MCU 设计的 Audi
 | webrtc | AEC2/NS/AGC/VAD | https://webrtc.googlesource.com/src/webrtc/+/e00dfb9675737cba8fc74efde80c11043cb57089 |
 | xiph-speexdsp | AEC/NS/AGC/VAD | https://github.com/xiph/speexdsp/tree/1b28a0f61bc31162979e1f26f3981fc3637095c8 |
 | athena-signal | AEC/NS/AGC/VAD/DOA/MVDR/GSC | https://github.com/athena-team/athena-signal/tree/master/athena_signal/kernels |
+| kissfft | FFT | https://github.com/mborgerding/kissfft/commit/7bce4153c6bc8aba2db0e889e576f9d00505cbe1 |
+| sonic | sonic | https://github.com/waywardgeek/sonic |
