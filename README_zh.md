@@ -292,10 +292,10 @@ CherryAVP 是一个小而美，低内存，高性能的专为 MCU 设计的 Audi
 | 名称 | 用途 | 源码地址 |
 | --- | --- | --- |
 | minimp3 | MP3 decoding | https://github.com/lieff/minimp3/tree/7b590fdcfa5a79c033e76eacc05d0c3e4c79f536 |
-| xiph-flac | FLAC encoding and decoding | https://android.googlesource.com/platform/external/flac https://github.com/xiph/flac |
-| xiph-opus | Opus encoding and decoding | https://android.googlesource.com/platform/external/libopus https://github.com/xiph/opus |
-| xiph-ogg | Ogg bitstream/container | https://android.googlesource.com/platform/external/libogg https://github.com/xiph/ogg |
-| xiph-vorbis | Vorbis encoding and decoding | https://android.googlesource.com/platform/external/libvorbis https://github.com/xiph/vorbis/tree/e3c9861ff096d52378e131ff8c334552e09cdffa |
+| xiph-flac | FLAC encoding and decoding | https://android.googlesource.com/platform/external/flac https://github.com/xiph/flac/tree/1.5.0 |
+| xiph-opus | Opus encoding and decoding | https://android.googlesource.com/platform/external/libopus https://github.com/xiph/opus/tree/v1.6.1 |
+| xiph-ogg | Ogg bitstream/container | https://android.googlesource.com/platform/external/libogg https://github.com/xiph/ogg/tree/v1.3.6 |
+| xiph-vorbis | Vorbis encoding and decoding | https://android.googlesource.com/platform/external/libvorbis https://github.com/xiph/vorbis/tree/v1.3.7 |
 | opencore-aac | AAC decoding | https://android.googlesource.com/platform/external/opencore/+/61bf9af643abf0011dcf82ae8a436aeb7e8aae97 |
 | opencore-amr | AMR-NB / AMR-WB encoding and decoding | https://android.googlesource.com/platform/external/opencore/+/61bf9af643abf0011dcf82ae8a436aeb7e8aae97 https://sourceforge.net/p/opencore-amr/code/ci/master/tree/ |
 | opencore-mp3 | MP3 decoding | https://android.googlesource.com/platform/external/opencore/+/61bf9af643abf0011dcf82ae8a436aeb7e8aae97 |
