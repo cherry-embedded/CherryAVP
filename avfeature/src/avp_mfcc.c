@@ -703,3 +703,24 @@ uint32_t avp_mfcc_get_step_samples(const avp_mfcc_t *handle)
 {
     return handle == NULL ? 0u : handle->config.frame_step;
 }
+
+uint32_t avp_mfcc_get_1s_frame_count(const avp_mfcc_config_t *config)
+{
+    uint32_t frame_length;
+    uint32_t frame_step;
+
+    if (config == NULL || config->sample_rate == 0u ||
+        config->window.size_ms == 0u || config->window.step_size_ms == 0u) {
+        return 0u;
+    }
+
+    frame_length = avp_mfcc_round_u32(
+        (float)config->sample_rate * (float)config->window.size_ms / 1000.0f);
+    frame_step = avp_mfcc_round_u32(
+        (float)config->sample_rate * (float)config->window.step_size_ms / 1000.0f);
+    if (frame_length == 0u || frame_step == 0u ||
+        config->sample_rate < frame_length) {
+        return 0u;
+    }
+    return (config->sample_rate - frame_length) / frame_step + 1u;
+}

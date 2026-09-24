@@ -24,6 +24,7 @@ CherryAVP 是一个小而美，低内存，高性能的专为 MCU 设计的 Audi
 - 支持多种音频效果算法
 - 支持采样率转换，声道转换，位深转换，数据交织和解交织
 - 支持 MFCC (split frame -> window -> FFT -> energy -> mel filterbank -> log -> DCT)
+- 支持 BFCC (split frame -> window -> FFT -> energy -> Bark filterbank -> log -> DCT)
 
 ## 编码器
 

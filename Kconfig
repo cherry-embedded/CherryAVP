@@ -91,6 +91,24 @@ endmenu
 
 menu "Audio processing"
 
+config CHERRYAVP_MFCC
+    bool "Enable MFCC module"
+    default y
+
+config CHERRYAVP_MFCC_RFFT_OVERRIDE
+    bool "Use external Q15 RFFT for MFCC"
+    depends on CHERRYAVP_MFCC
+    default n
+
+config CHERRYAVP_BFCC
+    bool "Enable BFCC module"
+    default y
+
+config CHERRYAVP_BFCC_RFFT_OVERRIDE
+    bool "Use external Q15 RFFT for BFCC"
+    depends on CHERRYAVP_BFCC
+    default n
+
 config CHERRYAVP_SWR
     bool "Enable Software resampler module"
     default y

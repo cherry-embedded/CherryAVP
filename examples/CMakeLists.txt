@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 
+set(CMAKE_C_COMPILER gcc)
+set(CMAKE_CXX_COMPILER g++)
+
 project(CherryAVExamples C CXX)
 
 set(CMAKE_C_STANDARD 11)
@@ -43,6 +46,7 @@ set(CONFIG_CHERRYAVP_AE_REVERB 1)
 set(CONFIG_CHERRYAVP_AE_COMPRESSOR 1)
 set(CONFIG_CHERRYAVP_AE_LIMITER 1)
 set(CONFIG_CHERRYAVP_MFCC 1)
+set(CONFIG_CHERRYAVP_BFCC 1)
 #set(CONFIG_CHERRYAVP_MP3_DECODER_OPENCORE 1)
 #set(CONFIG_CHERRYAVP_AAC_PLUS 1)
 #set(CONFIG_CHERRYAVP_AFE_3A_NS_FIXED 1)
@@ -115,4 +119,8 @@ endif()
 
 if(CONFIG_CHERRYAVP_MFCC)
     cherryavp_example(mfcc_demo mfcc_demo.c)
+endif()
+
+if(CONFIG_CHERRYAVP_BFCC)
+    cherryavp_example(bfcc_demo bfcc_demo.c)
 endif()

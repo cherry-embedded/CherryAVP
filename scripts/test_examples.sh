@@ -93,6 +93,36 @@ run_mfcc_case()
     python ${ROOT_DIR}/scripts/plot_mfcc.py "${output}"
 }
 
+run_bfcc_case()
+{
+    local name="$1"
+    local input="$2"
+    local output="${OUT_DIR}/bfcc_dump/${name}.bin"
+    local input_bytes
+    local input_samples
+    local frame_count
+    local expected_size
+    local actual_size
+
+    run_case "${name}" "${output}" \
+        "${BUILD_DIR}/examples/bfcc_demo" \
+        "${input}" "${output}"
+
+    if [ -f "${output}" ]; then
+        input_bytes=$(wc -c < "${input}")
+        input_samples=$((input_bytes / 2))
+        frame_count=$((input_samples >= 160 ? (input_samples - 160) / 160 + 1 : 0))
+        expected_size=$((frame_count * 22 * 4))
+        actual_size=$(wc -c < "${output}")
+        if [ "${actual_size}" -ne "${expected_size}" ]; then
+            printf '[FAIL] %-24s invalid output size: %s/%s\n' \
+                "${name}" "${actual_size}" "${expected_size}"
+            fail_count=$((fail_count + 1))
+            pass_count=$((pass_count - 1))
+        fi
+    fi
+}
+
 generate_test_files()
 {
     local input_wav="$1"
@@ -311,6 +341,14 @@ run_mfcc_case "mfcc_demo_yes_1000ms_16k" "${TEST_FILES_DIR}/jinitaimei_mfcc_yes_
 run_mfcc_case "mfcc_demo_no_1000ms_16k" "${TEST_FILES_DIR}/jinitaimei_mfcc_no_1000ms_16k.pcm"
 run_mfcc_case "mfcc_demo_noise_1000ms_16k" "${TEST_FILES_DIR}/jinitaimei_mfcc_noise_1000ms_16k.pcm"
 run_mfcc_case "mfcc_demo_silence_1000ms_16k" "${TEST_FILES_DIR}/jinitaimei_mfcc_silence_1000ms_16k.pcm"
+
+note ""
+note "BFCC demo"
+mkdir -p "${OUT_DIR}/bfcc_dump"
+run_bfcc_case "bfcc_demo_yes_1000ms_16k" "${TEST_FILES_DIR}/jinitaimei_mfcc_yes_1000ms_16k.pcm"
+run_bfcc_case "bfcc_demo_no_1000ms_16k" "${TEST_FILES_DIR}/jinitaimei_mfcc_no_1000ms_16k.pcm"
+run_bfcc_case "bfcc_demo_noise_1000ms_16k" "${TEST_FILES_DIR}/jinitaimei_mfcc_noise_1000ms_16k.pcm"
+run_bfcc_case "bfcc_demo_silence_1000ms_16k" "${TEST_FILES_DIR}/jinitaimei_mfcc_silence_1000ms_16k.pcm"
 
 note ""
 note "AFE 3A demo"
