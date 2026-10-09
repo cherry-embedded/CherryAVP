@@ -105,6 +105,14 @@ int avp_mfcc_process(avp_mfcc_t *handle,
  */
 uint32_t avp_mfcc_get_step_samples(const avp_mfcc_t *handle);
 
+/**
+ * @brief Get the number of complete MFCC frames in one second of audio.
+ *
+ * The result is calculated from @p config->sample_rate, frame length, and
+ * frame step. It returns zero for an invalid configuration.
+ */
+uint32_t avp_mfcc_get_1s_frame_count(const avp_mfcc_config_t *config);
+
 #ifdef __cplusplus
 }
 #endif

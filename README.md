@@ -23,7 +23,8 @@ CherryAVP is a tiny and beautiful, low-memory and high-performance audio and vid
 - Support Multiple audio front-end algorithms
 - Support Multiple audio effects algorithms
 - Support sample-rate, channel, bit-depth, data weaver conversion
-- Support MFCC (split frame -> window -> FFT -> energy -> mel filterbank -> log -> DCT)
+- Support Audio Feature Extraction
+- Support Image crop and scale
 
 ## Encoders
 
@@ -256,6 +257,11 @@ low-shelf, and high-shelf filters.
 ### Time and pitch modification (Sonic)
 
 ### Volume control (Volume Control)
+
+## Audio Feature Extraction
+
+- Support MFCC (split frame -> window -> FFT -> energy -> mel filterbank -> log -> DCT)
+- Support BFCC (split frame -> window -> FFT -> energy -> Bark filterbank -> log -> DCT)
 
 ## How to use
 
